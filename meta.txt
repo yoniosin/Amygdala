@@ -1,0 +1,1 @@
+{"min_w": 14, "voxels_num":248, "subjects_num": 87}
