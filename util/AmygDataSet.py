@@ -47,7 +47,6 @@ class GlobalAmygDataset(AmygDataset):
     def re_arrange(self):
         ds_shape = self.data.shape
         self.data = self.data.view(ds_shape[0] * ds_shape[1], *ds_shape[2:])
-        # self.data = self.data[:, 0]
 
     def __getitem__(self, item):
         passive = self.data[item, 0]
