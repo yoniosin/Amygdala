@@ -54,6 +54,15 @@ class GlobalAmygDataset(AmygDataset):
         return passive, active
 
 
+class SequenceAmygDataset(AmygDataset):
+    def __getitem__(self, item):
+        subject = self.data[item]
+        passive = subject[:, 0]
+        active = subject[:, 1]
+
+        return passive, active
+
+
 if __name__ == '__main__':
     md_ = LearnerMetaData()
     ds = GlobalAmygDataset(Path('../../timeseries/Data/3D'), md_)

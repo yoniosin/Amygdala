@@ -1,4 +1,4 @@
-from util.AmygDataSet import GlobalAmygDataset
+from util.AmygDataSet import AmygDataset, GlobalAmygDataset
 from util.config import LearnerMetaData
 from pathlib import Path
 from torch.utils.data import random_split, DataLoader
@@ -8,11 +8,13 @@ from torch.autograd import Variable
 import progressbar
 import numpy as np
 import torch
+from Models.RNN import RNN
 
 
 class STNet(nn.Module):
-    def __init__(self, input_shape):
+    def __init__(self, **kwargs):
         super().__init__()
+        input_shape = kwargs['input_shape']
         sizes = [1, 2, 4, 8, 8, 4, 2, 1]
         self.layers_n = len(sizes) - 1
         for i in range(self.layers_n):
@@ -36,15 +38,28 @@ class STNet(nn.Module):
         return x
 
 
-class SingleTransform:
-    def __init__(self, md: LearnerMetaData):
-        ds = GlobalAmygDataset(Path('../timeseries/Data/3D'), md)
+class SequenceTransformNet(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.single_transform = torch.load(open('single_run.pt', 'rb'))
+        self.rnn = RNN(14, 28, 14, 3)
+
+    def forward(self, x):
+        split = torch.split(x, 1, dim=1)
+        xT = torch.stack([self.single_transform(x_i) for x_i in split])
+        return self.rnn(xT.squeeze())
+
+
+class BaseModel:
+    def __init__(self, md: LearnerMetaData, ds_type, net_type, name='sqeuence'):
+        ds = ds_type(Path('../timeseries/Data/3D'), md)
         self.batch_size = md.batch_size
-        self.net = STNet(ds.get_sample_shape())
+        self.net = net_type(input_shape=ds.get_sample_shape())
+        self.name = name
         train_ds, test_ds = random_split(ds, (ds.train_len, ds.test_len))
         self.train_dl = DataLoader(train_ds, batch_size=md.batch_size, shuffle=True)
         self.test_dl = DataLoader(test_ds, batch_size=md.batch_size, shuffle=True)
-        self.optimizer = optim.Adam(self.net.parameters(), lr=2e-5, weight_decay=1e-1)
+        self.optimizer = optim.Adam(self.net.parameters(), lr=2e-1, weight_decay=0)
         self.loss_func = nn.MSELoss()
 
     def train(self, n_epochs):
@@ -57,7 +72,7 @@ class SingleTransform:
             writer.add_scalar('test', np.mean(test_loss), i)
 
         writer.close()
-        torch.save(self.net, 'last_run.pt')
+        torch.save(self.net, f'{self.name}last_run.pt')
 
     def test(self):
         with torch.no_grad():
@@ -81,7 +96,3 @@ class SingleTransform:
             self.optimizer.zero_grad()
 
         return float(loss)
-
-
-
-
