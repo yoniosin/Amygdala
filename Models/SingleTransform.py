@@ -42,7 +42,7 @@ class SequenceTransformNet(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))
-        self.rnn = RNN(14, 28, 14, 3)
+        self.rnn = RNN(14, 3)
 
     def forward(self, x):
         split = torch.split(x, 1, dim=1)
@@ -52,7 +52,7 @@ class SequenceTransformNet(nn.Module):
 
 class BaseModel:
     def __init__(self, md: LearnerMetaData, ds_type, net_type, name='sqeuence'):
-        ds = ds_type(Path('../timeseries/Data/3D'), md)
+        ds = ds_type(Path('/home/yonio/Projects/conv_gru/3d_data/3D'), md)
         self.batch_size = md.batch_size
         self.net = net_type(input_shape=ds.get_sample_shape())
         self.name = name

@@ -6,5 +6,5 @@
   <component name="NodePackageJsonFileManager">
     <packageJsonPaths />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.7 (conv_gru)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Remote Python 3.7.3 (sftp://yonio@149.81.96.211:22/anaconda/envs/yoni_3_7/bin/python)" project-jdk-type="Python SDK" />
 </project>
