@@ -62,6 +62,18 @@ class SequenceAmygDataset(AmygDataset):
 
         return passive, active
 
+# class PCSequenceAmygDataset(AmygDataset):
+#     def re_arrange(self):
+#         ds_shape = self.data.shape
+#         self.data = self.data.view(ds_shape[0], *ds_shape[2:-1], ds_shape[1] * ds_shape[-1])
+#
+#     def __getitem__(self, item):
+#         subject = self.data[item]
+#         passive = subject[0]
+#         active = subject[1]
+#
+#         return passive, active
+
 
 if __name__ == '__main__':
     md_ = LearnerMetaData()

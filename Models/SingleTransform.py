@@ -9,6 +9,7 @@ import progressbar
 import numpy as np
 import torch
 from Models.RNN import RNN
+from Models.PCLSTM import PCLSTM
 
 
 class STNet(nn.Module):
@@ -42,11 +43,11 @@ class SequenceTransformNet(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))
-        self.rnn = RNN(14, 3)
+        self.rnn = PCLSTM(10, [10])
 
     def forward(self, x):
         split = torch.split(x, 1, dim=1)
-        xT = torch.stack([self.single_transform(x_i) for x_i in split])
+        xT = torch.cat([self.single_transform(x_i) for x_i in split], dim=-1)
         return self.rnn(xT.squeeze())
 
 
@@ -81,13 +82,15 @@ class BaseModel:
     def run_model(self, train: bool):
         self.net.train(train)
         dl = self.train_dl if train else self.test_dl
-        return [self.run_bacth(batch, train) for batch in dl]
+        return [self.run_batch(batch, train) for batch in dl]
 
-    def run_bacth(self, batch, train: bool):
+    def run_batch(self, batch, train: bool):
         x, y = batch
+        ds_shape = y.shape
+        y = y.view(ds_shape[0], *ds_shape[2:-1], ds_shape[1] * ds_shape[-1])
         input_ = Variable(x, requires_grad=train)
-        target = Variable(y.squeeze(), requires_grad=False)
-        output = self.net(input_)
+        target = Variable(y, requires_grad=False)
+        output, c = self.net(input_)
 
         loss = self.loss_func(output, target)
         if train:
