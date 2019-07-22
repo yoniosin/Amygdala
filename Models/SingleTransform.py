@@ -8,7 +8,6 @@ from torch.autograd import Variable
 import progressbar
 import numpy as np
 import torch
-from Models.RNN import RNN
 from Models.PCLSTM import PCLSTM
 
 

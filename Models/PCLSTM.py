@@ -7,10 +7,13 @@ class PCLSTMCell(nn.Module):
         super().__init__()
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
-        self.forget_gate = nn.Linear(input_channels + hidden_channels, hidden_channels)
-        self.input_gate = nn.Linear(input_channels + hidden_channels, hidden_channels)
-        self.update_gate = nn.Linear(input_channels + hidden_channels, hidden_channels)
-        self.output_gate = nn.Linear(input_channels + hidden_channels, hidden_channels)
+        create_gate = lambda: nn.Linear(self.input_channels + self.hidden_channels, self.hidden_channels)
+        create_gates_dict = lambda :nn.ModuleDict({'forget_gate': create_gate(),
+                                                'input_gate': create_gate(),
+                                                'update_gate': create_gate(),
+                                                'output_gate': create_gate()})
+        self.regular_gates = create_gates_dict()
+        self.transition_gates = create_gates_dict()
         self.initial_hidden = None
 
 
