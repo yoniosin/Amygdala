@@ -42,12 +42,12 @@ class SequenceTransformNet(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))
-        self.rnn = PCLSTM(10, [10])
+        self.rnn = PCLSTM(10, [10], sub_sequence_len=14)
 
-    def forward(self, x):
+    def forward(self, x, y):
         split = torch.split(x, 1, dim=1)
         xT = torch.cat([self.single_transform(x_i) for x_i in split], dim=-1)
-        return self.rnn(xT.squeeze())
+        return self.rnn(xT.squeeze(), y)
 
 
 class BaseModel:
@@ -59,7 +59,7 @@ class BaseModel:
         train_ds, test_ds = random_split(ds, (ds.train_len, ds.test_len))
         self.train_dl = DataLoader(train_ds, batch_size=md.batch_size, shuffle=True)
         self.test_dl = DataLoader(test_ds, batch_size=md.batch_size, shuffle=True)
-        self.optimizer = optim.Adam(self.net.parameters(), lr=2e-1, weight_decay=0)
+        self.optimizer = optim.Adam(self.net.parameters(), lr=2e0, weight_decay=0)
         self.loss_func = nn.MSELoss()
 
     def train(self, n_epochs):
@@ -89,7 +89,7 @@ class BaseModel:
         y = y.view(ds_shape[0], *ds_shape[2:-1], ds_shape[1] * ds_shape[-1])
         input_ = Variable(x, requires_grad=train)
         target = Variable(y, requires_grad=False)
-        output, c = self.net(input_)
+        output, c = self.net(input_, y)
 
         loss = self.loss_func(output, target)
         if train:
