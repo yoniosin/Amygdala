@@ -18,17 +18,23 @@ class PCLSTMCell(nn.Module):
 
         self.gates = {'regular': create_gates_dict(), 'transition': create_gates_dict()}
         self.initial_hidden = None
+    
+    @property
+    def regualar_gates(self): return self.gates['regular']
+    
+    @property
+    def transition_gates(self): return self.gates['transition']
 
     def forward(self, x, h_prev, c_prev, transition=False):
         if self.initial_hidden is None:
             raise AttributeError('Initial state not initialized')
 
         stacked_inputs = torch.cat((x, h_prev), dim=-1)
-        gates_dict = self.gates['transition'] if transition else self.gates['regular']
+        gates_dict = self.transition_gates if transition else self.regualar_gates
         f_t = nn.Sigmoid()(gates_dict['forget_gate'](stacked_inputs))
-        i_t = nn.Sigmoid()(self.gates['regular']['input_gate'](stacked_inputs))
-        c_opt = nn.Tanh()(self.gates['regular']['update_gate'](stacked_inputs))
-        o_t = nn.Sigmoid()(self.gates['regular']['output_gate'](stacked_inputs))
+        i_t = nn.Sigmoid()(self.regualar_gates['input_gate'](stacked_inputs))
+        c_opt = nn.Tanh()(self.regualar_gates['update_gate'](stacked_inputs))
+        o_t = nn.Sigmoid()(self.regualar_gates['output_gate'](stacked_inputs))
 
         c_t = c_prev * f_t + i_t * c_opt
         h_t = o_t * nn.Tanh()(c_t)
@@ -37,18 +43,18 @@ class PCLSTMCell(nn.Module):
 
 
 class PCLSTM(nn.Module):
-    def __init__(self, input_channels, hidden_channels, sub_sequence_len, num_layers=1):
+    def __init__(self, input_channels, hidden_channels, sub_sequence_len, allow_transition=False,num_layers=1):
         super().__init__()
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
         self.subsequence_len = sub_sequence_len
+        self.allow_transition = allow_transition
 
         self.cells = nn.ModuleList([PCLSTMCell(hidden_channels=self.hidden_channels[i],
-                                               input_channels=self.input_channels if i == 0 else self.hidden_channels[
-                                                   i - 1])
+                                               input_channels=self.input_channels if i == 0 else self.hidden_channels[i - 1])
                                     for i in range(num_layers)])
 
-    def forward(self, x, y, h_0=None):
+    def forward(self, x, y,h_0=None):
         in_shape = x.shape
         sequence_len = in_shape[-1]
         self.init_hidden(h_0, input_shape=in_shape[:-2])
@@ -60,7 +66,7 @@ class PCLSTM(nn.Module):
                 x_i = x[..., t]
                 y_prev = y[..., t - 1] if t > 0 else torch.zeros(x_i.shape)
                 h = torch.cat((h, y_prev), dim=-1)
-                use_transition_gate = t % self.subsequence_len == 0
+                use_transition_gate = self.allow_transition and t % self.subsequence_len == 0
                 h, c = cell(x_i, h, c, use_transition_gate)
                 inner_cell_out.append(h)
 

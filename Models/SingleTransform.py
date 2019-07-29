@@ -42,24 +42,24 @@ class SequenceTransformNet(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))
-        self.rnn = PCLSTM(10, [10], sub_sequence_len=14)
+        self.rnn = PCLSTM(10, [10], sub_sequence_len=14, allow_transition=kwargs.get('allow_transition', False))
 
     def forward(self, x, y):
         split = torch.split(x, 1, dim=1)
         xT = torch.cat([self.single_transform(x_i) for x_i in split], dim=-1)
-        return self.rnn(xT.squeeze(), y)
+        return self.rnn(xT.squeeze(1), y)
 
 
 class BaseModel:
-    def __init__(self, md: LearnerMetaData, ds_type, net_type, name='sqeuence'):
+    def __init__(self, md: LearnerMetaData, ds_type, net_type, name='sqeuence', allow_transition=False):
         ds = ds_type(Path('/home/yonio/Projects/conv_gru/3d_data/3D'), md)
         self.batch_size = md.batch_size
-        self.net = net_type(input_shape=ds.get_sample_shape())
+        self.net = net_type(input_shape=ds.get_sample_shape(), allow_transition=allow_transition)
         self.name = name
         train_ds, test_ds = random_split(ds, (ds.train_len, ds.test_len))
         self.train_dl = DataLoader(train_ds, batch_size=md.batch_size, shuffle=True)
         self.test_dl = DataLoader(test_ds, batch_size=md.batch_size, shuffle=True)
-        self.optimizer = optim.Adam(self.net.parameters(), lr=2e0, weight_decay=0)
+        self.optimizer = optim.Adam(self.net.parameters(), lr=md.learning_rate, weight_decay=md.weight_decay)
         self.loss_func = nn.MSELoss()
 
     def train(self, n_epochs):
@@ -81,7 +81,11 @@ class BaseModel:
     def run_model(self, train: bool):
         self.net.train(train)
         dl = self.train_dl if train else self.test_dl
-        return [self.run_batch(batch, train) for batch in dl]
+        batch_res = []
+        for batch in dl:
+            batch_res.append(self.run_batch(batch, train))
+        
+        return batch_res
 
     def run_batch(self, batch, train: bool):
         x, y = batch

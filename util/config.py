@@ -44,6 +44,8 @@ class LearnerMetaData:
     batch_size: int = 2
     train_ratio: float = 0.8
     train_windows: int = 2
+    learning_rate: float = 2.
+    weight_decay: float = 0.
     total_subject: int = field(init=False)
     min_w: int = field(init=False)
     voxels_num: int = field(init=False)
