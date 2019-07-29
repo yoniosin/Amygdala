@@ -33,11 +33,12 @@ class PCLSTMCell(nn.Module):
         return h_t, c_t
 
 class PCLSTM(nn.Module):
-    def __init__(self, input_channels, hidden_channels,sub_sequence_len, num_layers=1):
+    def __init__(self, input_channels, hidden_channels,sub_sequence_len, allow_transition=False, num_layers=1):
         super().__init__()
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
         self.subsequence_len = sub_sequence_len
+        self.allow_transition = allow_transition
 
         self.cells = nn.ModuleList([PCLSTMCell(hidden_channels=self.hidden_channels[i],
                                     input_channels=self.input_channels if i==0 else self.hidden_channels[i-1])
@@ -55,7 +56,7 @@ class PCLSTM(nn.Module):
                 x_i = x[..., t]
                 y_prev = y[..., t - 1] if t > 0 else torch.zeros(x_i.shape)
                 h = torch.cat((h, y_prev), dim=-1)
-                use_transition_gate = (t % self.subsequence_len) == self.subsequence_len - 1
+                use_transition_gate = self.allow_transition and (t % self.subsequence_len == 0)
                 h, c = cell(x_i, h, c, use_transition_gate)
                 inner_cell_out.append(h)
 
