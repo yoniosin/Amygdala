@@ -47,7 +47,7 @@ class SequenceTransformNet(nn.Module):
     def forward(self, x, y):
         split = torch.split(x, 1, dim=1)
         xT = torch.cat([self.single_transform(x_i) for x_i in split], dim=-1)
-        return self.rnn(xT.squeeze(), y)
+        return self.rnn(xT.squeeze(1), y)
 
 
 class BaseModel:
