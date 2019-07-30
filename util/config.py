@@ -41,6 +41,8 @@ class ROIData:
 
 @dataclass
 class LearnerMetaData:
+    run_num: int
+    allow_transition: bool
     batch_size: int = 2
     train_ratio: float = 0.8
     train_windows: int = 2
@@ -48,6 +50,9 @@ class LearnerMetaData:
     min_w: int = field(init=False)
     voxels_num: int = field(init=False)
     in_channels: int = field(init=False)
+    run_name: str = field(init=False)
+    runs_dir: str = 'runs'
+
 
     def __post_init__(self):
         assert 0 < self.train_ratio < 1
@@ -57,6 +62,7 @@ class LearnerMetaData:
         self.min_w = meta_dict['min_w']
         self.voxels_num = meta_dict['voxels_num']
         self.in_channels = self.train_windows * 2 + 1
+        self.run_name = f'{self.runs_dir}/run#{self.run_num}({self.allow_transition})'
 
     def to_json(self): return asdict(self)
 

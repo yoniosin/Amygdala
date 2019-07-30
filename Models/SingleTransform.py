@@ -1,7 +1,6 @@
 from util.AmygDataSet import AmygDataset, GlobalAmygDataset
 from util.config import LearnerMetaData
 from pathlib import Path
-from torch.utils.data import random_split, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch import nn, optim
 from torch.autograd import Variable
@@ -42,7 +41,7 @@ class SequenceTransformNet(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))
-        self.rnn = PCLSTM(10, [10], sub_sequence_len=14)
+        self.rnn = PCLSTM(10, [10], sub_sequence_len=14, allow_transition=kwargs.get('allow_transition', False))
 
     def forward(self, x, y):
         split = torch.split(x, 1, dim=1)
@@ -51,20 +50,19 @@ class SequenceTransformNet(nn.Module):
 
 
 class BaseModel:
-    def __init__(self, md: LearnerMetaData, ds_type, net_type, name='sqeuence'):
-        ds = ds_type(Path('/home/yonio/Projects/conv_gru/3d_data/3D'), md)
+    def __init__(self, md: LearnerMetaData, train_dl, test_dl, input_shape, net_type, name='sqeuence'):
         self.batch_size = md.batch_size
-        self.net = net_type(input_shape=ds.get_sample_shape())
+        self.net = net_type(input_shape=input_shape, allow_transition=md.allow_transition)
         self.name = name
-        train_ds, test_ds = random_split(ds, (ds.train_len, ds.test_len))
-        self.train_dl = DataLoader(train_ds, batch_size=md.batch_size, shuffle=True)
-        self.test_dl = DataLoader(test_ds, batch_size=md.batch_size, shuffle=True)
+        self.train_dl = train_dl
+        self.test_dl = test_dl
+        self.run_name = md.run_name
         self.optimizer = optim.Adam(self.net.parameters(), lr=2e0, weight_decay=0)
         self.loss_func = nn.MSELoss()
 
     def train(self, n_epochs):
         bar = progressbar.ProgressBar()
-        writer = SummaryWriter()
+        writer = SummaryWriter(self.run_name)
         for i in bar(range(n_epochs)):
             train_loss = self.run_model(train=True)
             writer.add_scalar('train', np.mean(train_loss), i)
@@ -72,7 +70,7 @@ class BaseModel:
             writer.add_scalar('test', np.mean(test_loss), i)
 
         writer.close()
-        torch.save(self.net, f'{self.name}last_run.pt')
+        torch.save(self.net, f'{self.name}_last_run.pt')
 
     def test(self):
         with torch.no_grad():
