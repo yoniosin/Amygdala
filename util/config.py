@@ -45,7 +45,8 @@ class LearnerMetaData:
     allow_transition: bool
     batch_size: int = 2
     train_ratio: float = 0.8
-    train_windows: int = 2
+    train_windows: int = 3
+    transition_phases: List[int] = field(init=False)
     total_subject: int = field(init=False)
     min_w: int = field(init=False)
     voxels_num: int = field(init=False)
@@ -63,6 +64,8 @@ class LearnerMetaData:
         self.voxels_num = meta_dict['voxels_num']
         self.in_channels = self.train_windows * 2 + 1
         self.run_name = f'{self.runs_dir}/run#{self.run_num}({self.allow_transition})'
+        self.transition_phases = list(map(lambda x: x * self.min_w, range(self.train_windows)))
+
 
     def to_json(self): return asdict(self)
 

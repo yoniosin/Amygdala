@@ -41,7 +41,7 @@ class SequenceTransformNet(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))
-        self.rnn = PCLSTM(10, [10], sub_sequence_len=14, allow_transition=kwargs.get('allow_transition', False))
+        self.rnn = PCLSTM(10, [10], transition_phases=kwargs.get('transition_phases'), allow_transition=kwargs.get('allow_transition', False))
 
     def forward(self, x, y):
         split = torch.split(x, 1, dim=1)
@@ -52,22 +52,27 @@ class SequenceTransformNet(nn.Module):
 class BaseModel:
     def __init__(self, md: LearnerMetaData, train_dl, test_dl, input_shape, net_type, name='sqeuence'):
         self.batch_size = md.batch_size
-        self.net = net_type(input_shape=input_shape, allow_transition=md.allow_transition)
+        self.transition_phases = md.transition_phases
+        self.net = net_type(input_shape=input_shape, allow_transition=md.allow_transition, transition_phases=md.transition_phases)
         self.name = name
         self.train_dl = train_dl
         self.test_dl = test_dl
         self.run_name = md.run_name
         self.optimizer = optim.Adam(self.net.parameters(), lr=2e0, weight_decay=0)
         self.loss_func = nn.MSELoss()
+        
 
     def train(self, n_epochs):
         bar = progressbar.ProgressBar()
         writer = SummaryWriter(self.run_name)
         for i in bar(range(n_epochs)):
             train_loss = self.run_model(train=True)
-            writer.add_scalar('train', np.mean(train_loss), i)
+            writer.add_scalar('train', np.mean([x[0] for x in train_loss]), i)
+            writer.add_scalar('train_transition', np.mean([x[1] for x in train_loss]), i)
             test_loss = self.test()
-            writer.add_scalar('test', np.mean(test_loss), i)
+            writer.add_scalar('test', np.mean([x[0] for x in test_loss]), i)
+            writer.add_scalar('test_transition', np.mean([x[1] for x in test_loss]), i)
+
 
         writer.close()
         torch.save(self.net, f'{self.name}_last_run.pt')
@@ -90,9 +95,10 @@ class BaseModel:
         output, c = self.net(input_, y)
 
         loss = self.loss_func(output, target)
+        transition_loss = self.loss_func(output[..., self.transition_phases], target[..., self.transition_phases])
         if train:
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-        return float(loss)
+        return float(loss), float(transition_loss)
