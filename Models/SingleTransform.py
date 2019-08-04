@@ -42,11 +42,14 @@ class SequenceTransformNet(nn.Module):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))
         self.rnn = PCLSTM(10, [10], transition_phases=kwargs.get('transition_phases'), allow_transition=kwargs.get('allow_transition', False))
+        self.fc = nn.Linear(420, 42 * 800)
 
-    def forward(self, x, y):
+    def forward(self, x, subject_id, y):
         split = torch.split(x, 1, dim=1)
         xT = torch.cat([self.single_transform(x_i) for x_i in split], dim=-1)
-        return self.rnn(xT.squeeze(1), y)
+        rnn_out, c_out = self.rnn(xT.squeeze(1), subject_id, y)
+        y = self.fc(rnn_out.view(x.shape[0], -1)).view(x.shape[0], 10, 8, 10, 42)
+        return y, c_out
 
 
 class BaseModel:
@@ -87,12 +90,12 @@ class BaseModel:
         return [self.run_batch(batch, train) for batch in dl]
 
     def run_batch(self, batch, train: bool):
-        x, y = batch
+        x, y, subject_id = batch
         ds_shape = y.shape
         y = y.view(ds_shape[0], *ds_shape[2:-1], ds_shape[1] * ds_shape[-1])
         input_ = Variable(x, requires_grad=train)
         target = Variable(y, requires_grad=False)
-        output, c = self.net(input_, y)
+        output, c = self.net(input_, subject_id, y)
 
         loss = self.loss_func(output, target)
         transition_loss = self.loss_func(output[..., self.transition_phases], target[..., self.transition_phases])

@@ -45,7 +45,7 @@ class LearnerMetaData:
     allow_transition: bool
     batch_size: int = 2
     train_ratio: float = 0.8
-    train_windows: int = 3
+    train_windows: int = 2
     transition_phases: List[int] = field(init=False)
     total_subject: int = field(init=False)
     min_w: int = field(init=False)

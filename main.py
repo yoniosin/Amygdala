@@ -32,7 +32,8 @@ if __name__ == '__main__':
     md = LearnerMetaData(batch_size=20,
                          train_ratio=0.9,
                          run_num=run_num,
-                         allow_transition=args.t)
+                         allow_transition=args.t,
+                         )
     train_dl, test_dl, input_shape = load_data_set(SequenceAmygDataset, md)
     model = BaseModel(md, train_dl, test_dl, input_shape, net_type=SequenceTransformNet)
     model.train(50)

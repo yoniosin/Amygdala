@@ -59,20 +59,10 @@ class SequenceAmygDataset(AmygDataset):
         subject = self.data[item]
         passive = subject[:, 0]
         active = subject[:, 1]
+        subject_id = torch.zeros(87)
+        subject_id[item] = 1
 
-        return passive, active
-
-# class PCSequenceAmygDataset(AmygDataset):
-#     def re_arrange(self):
-#         ds_shape = self.data.shape
-#         self.data = self.data.view(ds_shape[0], *ds_shape[2:-1], ds_shape[1] * ds_shape[-1])
-#
-#     def __getitem__(self, item):
-#         subject = self.data[item]
-#         passive = subject[0]
-#         active = subject[1]
-#
-#         return passive, active
+        return passive, active, subject_id
 
 
 if __name__ == '__main__':
