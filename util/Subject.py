@@ -3,6 +3,7 @@ from itertools import chain
 from abc import abstractmethod
 import torch
 import numpy as np
+import re
 
 
 class Subject:
@@ -28,7 +29,10 @@ class Subject:
             return X, y
         else:
             res = torch.stack([w.get_data(width) for w in self.get_windows(train_num + 1)])
-            return res, self.get_score(train_num)
+            return res
+
+    @property
+    def subject_num(self): return int(re.search(r'(\d{3})$', name).group(1))
 
     def get_single_experience(self, idx, width):
         return self.paired_windows[idx].get_data(width)
@@ -45,7 +49,7 @@ class Subject:
     
     def get_score(self, train_windows): 
         #return np.mean([pw.score for pw in self.paired_windows[:train_windows]])
-        return self.paired_windows[0].score
+        return (self.paired_windows[0].watch_window.mean, self.paired_windows[0].regulate_window.mean)
     
     def calc_score(self): 
         for pw in self.paired_windows:

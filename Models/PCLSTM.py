@@ -51,7 +51,7 @@ class PCLSTM(nn.Module):
                                     input_size=self.input_size if i==0 else self.hidden_channels[i-1])
                                     for i in range(num_layers)])
 
-        self.initilaizer = nn.Linear(87, self.hidden_size[0])
+        self.initilaizer = nn.Linear(105, self.hidden_size[0])
 
     def forward(self, x, subject_id, y, h_0=None):
         in_shape = x.shape

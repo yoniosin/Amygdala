@@ -90,12 +90,12 @@ class BaseModel:
         return [self.run_batch(batch, train) for batch in dl]
 
     def run_batch(self, batch, train: bool):
-        x, y, subject_id = batch
+        subject_num, x, y, subject_score, subject_one_hot = batch
         ds_shape = y.shape
         y = y.view(ds_shape[0], *ds_shape[2:-1], ds_shape[1] * ds_shape[-1])
         input_ = Variable(x, requires_grad=train)
         target = Variable(y, requires_grad=False)
-        output, c = self.net(input_, subject_id, y)
+        output, c = self.net(input_, subject_one_hot, y)
 
         loss = self.loss_func(output, target)
         transition_loss = self.loss_func(output[..., self.transition_phases], target[..., self.transition_phases])

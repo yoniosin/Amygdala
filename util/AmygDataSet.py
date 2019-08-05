@@ -4,38 +4,40 @@ from util.config import LearnerMetaData
 from pathlib import Path
 import pickle
 import os
+import json
+import re
 
 
 class AmygDataset(Dataset):
     def __init__(self, subjects_path: Path, md: LearnerMetaData, load=False):
-        def get_subject_data(path):
-            subject = pickle.load(open(str(path), 'rb'))
-            score = subject.calc_score()
-            res = subject.get_data(train_num=md.train_windows, width=md.min_w, scalar_result=False)
-            return res
-
         if load:
             bold_file_name = os.path.join('data', '_'.join(('3d', 'dataset.pt')))
             if os.path.isfile(bold_file_name):
                 self.data = torch.load(bold_file_name)
             else: raise IOError('Missing Train File')
         else:
-            data, score = zip(*[get_subject_data(p) for p in subjects_path.iterdir()])
-            self.data = torch.stack(data)
-            self.score = [int(10 * score[i]) for i in range(len(score))]
-            self.re_arrange()
+            self.subjects_dict = {}
+            def create_one_hot(idx):
+                vec = torch.zeros(105)
+                vec[idx] = 1
+                return vec
+
+            for i, subject_path in enumerate(subjects_path.iterdir()):
+                subject = pickle.load(open(str(subject_path), 'rb'))
+                data = subject.get_data(train_num=md.train_windows, width=md.min_w, scalar_result=False)
+                subject_num = int(re.search(r'(\d{3})$', subject.name).group(1))
+                subject_score = subject.get_score(md.train_windows)
+                subject_one_hot = create_one_hot(subject_num)
+
+                self.subjects_dict[i] = (subject_num, data, (subject_score), subject_one_hot)
 
         self.train_len = int(len(self) * md.train_ratio)
         self.test_len = len(self) - self.train_len
-        
 
     def save(self):
         torch.save(self.data, open('_'.join(('3d', 'dataset.pt')), 'wb'))
 
-    def re_arrange(self):
-        pass
-
-    def __len__(self): return self.data.shape[0]
+    def __len__(self): return len(self.subjects_dict)
 
     def __getitem__(self, item):
         subject = self.data[item]
@@ -44,7 +46,7 @@ class AmygDataset(Dataset):
         active = subject[-1, 1]
         return history, passive, active
 
-    def get_sample_shape(self): return self.data.shape[2:]
+    def get_sample_shape(self): return self.subjects_dict[0][1].shape
 
 
 class GlobalAmygDataset(AmygDataset):
@@ -60,14 +62,15 @@ class GlobalAmygDataset(AmygDataset):
 
 class SequenceAmygDataset(AmygDataset):
     def __getitem__(self, item):
-        subject = self.data[item]
-        passive = subject[:, 0]
-        active = subject[:, 1]
-        subject_id = torch.zeros(87)
-        subject_id[item] = 1
+        subject = self.subjects_dict[item]
+        subject_num = subject[0]
+        subject_data = subject[1]
+        passive = subject_data[:, 0]
+        active = subject_data[:, 1]
+        subject_score = subject[2]
+        subject_one_hot = subject[3]
 
-        return passive, active, subject_id
-
+        return subject_num, passive, active, subject_score, subject_one_hot
 
 if __name__ == '__main__':
     md_ = LearnerMetaData()
