@@ -3,45 +3,36 @@ from torch import nn
 from torch.autograd import Variable
 
 class PCLSTMCell(nn.Module):
-    def __init__(self,  input_channels,  hidden_size):
+    def __init__(self,  input_size,  hidden_size):
         super().__init__()
-        self.input_channels = input_channels
+        self.input_size = input_size
         self.hidden_size = hidden_size
-        def create_gate(requires_grad): 
-            layer = nn.Linear(self.input_channels * 2 + self.hidden_size, self.hidden_size)
-            for key in layer._parameters:
-                layer._parameters[key].requires_grad=requires_grad
-            return layer
-        
-        input_size = 1600
-        self.forget_input = nn.Linear(input_size, self.hidden_size)
-        self.forget_hidden = nn.Linear(self.hidden_size, self.hidden_size)
-        self.input_input = nn.Linear(input_size, self.hidden_size)
-        self.input_hidden = nn.Linear(self.hidden_size, self.hidden_size)
-        self.update_input = nn.Linear(input_size, self.hidden_size)
-        self.update_hidden = nn.Linear(self.hidden_size, self.hidden_size)
-        self.out_input = nn.Linear(input_size, self.hidden_size)
-        self.out_hidden = nn.Linear(self.hidden_size, self.hidden_size)
+        def gen_input_gate(): return nn.Linear(self.input_size, self.hidden_size)
+        def gen_hidden_gate(): return nn.Linear(self.hidden_size, self.hidden_size)
 
-
+        self.forget_input = gen_input_gate()
+        self.forget_hidden = gen_hidden_gate()
+        self.input_input = gen_input_gate()
+        self.input_hidden = gen_hidden_gate()
+        self.update_input = gen_input_gate()
+        self.update_hidden = gen_hidden_gate()
+        self.out_input = gen_input_gate()
+        self.out_hidden = gen_hidden_gate()
 
         self.initial_hidden = None
     
-    @property
-    def regular_gates(self): return self.gates['regular']
-    
-    @property
-    def transition_gates(self): return self.gates['transition']
-
-
     def forward(self, x, h_prev, c_prev, transition=False):
         if self.initial_hidden is None:
             raise AttributeError('Initial state not initialized')
+        
+        def propagate(input_gate, hidden_gate): 
+            return input_gate(x) + hidden_gate(h_prev)
+
         x = x.view(x.shape[0], -1)
-        f_t = nn.Sigmoid()(self.forget_input(x) + self.forget_hidden(h_prev))
-        i_t = nn.Sigmoid()(self.input_input(x) + self.input_hidden(h_prev))
-        c_opt = nn.Tanh()(self.update_input(x) + self.update_hidden(h_prev))
-        o_t = nn.Sigmoid()(self.out_input(x) + self.out_hidden(h_prev))
+        f_t = nn.Sigmoid()(propagate(self.forget_input, self.forget_hidden))
+        i_t = nn.Sigmoid()(propagate(self.input_input, self.input_hidden))
+        c_opt = nn.Tanh()(propagate(self.update_input, self.update_hidden))
+        o_t = nn.Sigmoid()(propagate(self.out_input, self.out_hidden))
 
         c_t = c_prev * f_t + i_t * c_opt
         h_t = o_t * nn.Tanh()(c_t)
@@ -49,18 +40,18 @@ class PCLSTMCell(nn.Module):
         return h_t, c_t
 
 class PCLSTM(nn.Module):
-    def __init__(self, input_channels, hidden_channels,transition_phases, allow_transition=False, num_layers=1):
+    def __init__(self, input_size, hidden_size, transition_phases, allow_transition=False, num_layers=1):
         super().__init__()
-        self.input_channels = input_channels
-        self.hidden_channels = hidden_channels
+        self.input_size = input_size
+        self.hidden_size = hidden_size
         self.transition_phases = transition_phases
         self.allow_transition = allow_transition
 
-        self.cells = nn.ModuleList([PCLSTMCell(hidden_size=self.hidden_channels[i],
-                                    input_channels=self.input_channels if i==0 else self.hidden_channels[i-1])
+        self.cells = nn.ModuleList([PCLSTMCell(hidden_size=self.hidden_size[i],
+                                    input_size=self.input_size if i==0 else self.hidden_channels[i-1])
                                     for i in range(num_layers)])
 
-        self.initilaizer = nn.Linear(87, self.hidden_channels[0])
+        self.initilaizer = nn.Linear(87, self.hidden_size[0])
 
     def forward(self, x, subject_id, y, h_0=None):
         in_shape = x.shape
@@ -90,10 +81,10 @@ class PCLSTM(nn.Module):
                 cell.initial_hidden = h_0_i
                 return
         else:
-            zero_h_state = lambda: Variable(torch.zeros(input_shape[0], self.hidden_channels[0]))
-            zero_c_state = lambda id: self.initilaizer(id)
+            def zero_h_state(): return Variable(torch.zeros(input_shape[0], self.hidden_size[0]))
+            def zero_c_state(id): return self.initilaizer(id) if self.allow_transition else zero_h_state()
             for i, cell in enumerate(self.cells):
-                cell.initial_hidden = (zero_h_state(), zero_c_state(subject_id)) #  2 for h, c
+                cell.initial_hidden = (zero_h_state(), zero_c_state(subject_id))
 #        else:
 #            zero_h_state = lambda j: Variable(torch.zeros(*input_shape, self.hidden_channels[j]))
 #            init_c_state = lambda id: self.initilizer(subject_id)

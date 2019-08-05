@@ -41,7 +41,7 @@ class SequenceTransformNet(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))
-        self.rnn = PCLSTM(10, [10], transition_phases=kwargs.get('transition_phases'), allow_transition=kwargs.get('allow_transition', False))
+        self.rnn = PCLSTM(1600, [10], transition_phases=kwargs.get('transition_phases'), allow_transition=kwargs.get('allow_transition', False))
         self.fc = nn.Linear(420, 42 * 800)
 
     def forward(self, x, subject_id, y):
@@ -53,7 +53,7 @@ class SequenceTransformNet(nn.Module):
 
 
 class BaseModel:
-    def __init__(self, md: LearnerMetaData, train_dl, test_dl, input_shape, net_type, name='sqeuence'):
+    def __init__(self,  input_shape, hidden_shape, md: LearnerMetaData, train_dl, test_dl, net_type, name='sqeuence'):
         self.batch_size = md.batch_size
         self.transition_phases = md.transition_phases
         self.net = net_type(input_shape=input_shape, allow_transition=md.allow_transition, transition_phases=md.transition_phases)

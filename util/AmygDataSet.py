@@ -10,6 +10,7 @@ class AmygDataset(Dataset):
     def __init__(self, subjects_path: Path, md: LearnerMetaData, load=False):
         def get_subject_data(path):
             subject = pickle.load(open(str(path), 'rb'))
+            score = subject.calc_score()
             res = subject.get_data(train_num=md.train_windows, width=md.min_w, scalar_result=False)
             return res
 
@@ -19,11 +20,14 @@ class AmygDataset(Dataset):
                 self.data = torch.load(bold_file_name)
             else: raise IOError('Missing Train File')
         else:
-            self.data = torch.stack([get_subject_data(p) for p in subjects_path.iterdir()])
+            data, score = zip(*[get_subject_data(p) for p in subjects_path.iterdir()])
+            self.data = torch.stack(data)
+            self.score = [int(10 * score[i]) for i in range(len(score))]
             self.re_arrange()
 
         self.train_len = int(len(self) * md.train_ratio)
         self.test_len = len(self) - self.train_len
+        
 
     def save(self):
         torch.save(self.data, open('_'.join(('3d', 'dataset.pt')), 'wb'))
