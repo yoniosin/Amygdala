@@ -1,13 +1,12 @@
-from util.AmygDataSet import AmygDataset, GlobalAmygDataset
 from util.config import LearnerMetaData
-from pathlib import Path
-from torch.utils.tensorboard import SummaryWriter
 from torch import nn, optim
 from torch.autograd import Variable
 import progressbar
 import numpy as np
 import torch
 from Models.PCLSTM import PCLSTM
+from torch.utils.tensorboard import SummaryWriter
+from functools import reduce
 
 
 class STNet(nn.Module):
@@ -38,11 +37,14 @@ class STNet(nn.Module):
 
 
 class SequenceTransformNet(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self, input_shape, hidden_size, **kwargs):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))
-        self.rnn = PCLSTM(1600, [10], transition_phases=kwargs.get('transition_phases'), allow_transition=kwargs.get('allow_transition', False))
-        self.fc = nn.Linear(420, 42 * 800)
+        self.rnn = PCLSTM(1600, [hidden_size], transition_phases=kwargs.get('transition_phases'), allow_transition=kwargs.get('allow_transition', False))
+        phases = input_shape[0]
+        t = input_shape[-1]
+        spacial_size = reduce(lambda a, b: a*b, input_shape[-4:])
+        self.fc = nn.Linear(t * phases * hidden_size, phases * spacial_size)
 
     def forward(self, x, subject_id, y):
         split = torch.split(x, 1, dim=1)
@@ -53,28 +55,25 @@ class SequenceTransformNet(nn.Module):
 
 
 class BaseModel:
-    def __init__(self,  input_shape, hidden_shape, md: LearnerMetaData, train_dl, test_dl, net_type, name='sqeuence'):
+    def __init__(self,  input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, net_type, name='sqeuence'):
         self.batch_size = md.batch_size
         self.transition_phases = md.transition_phases
-        self.net = net_type(input_shape=input_shape, allow_transition=md.allow_transition, transition_phases=md.transition_phases)
+        self.net = net_type(input_shape, hidden_size, allow_transition=md.allow_transition)
         self.name = name
         self.train_dl = train_dl
         self.test_dl = test_dl
         self.run_name = md.run_name
-        self.optimizer = optim.Adam(self.net.parameters(), lr=2e0, weight_decay=0)
+        self.optimizer = optim.Adam(self.net.parameters(), lr=2e-1, weight_decay=0)
         self.loss_func = nn.MSELoss()
         
-
     def train(self, n_epochs):
         bar = progressbar.ProgressBar()
         writer = SummaryWriter(self.run_name)
         for i in bar(range(n_epochs)):
             train_loss = self.run_model(train=True)
             writer.add_scalar('train', np.mean([x[0] for x in train_loss]), i)
-            writer.add_scalar('train_transition', np.mean([x[1] for x in train_loss]), i)
             test_loss = self.test()
             writer.add_scalar('test', np.mean([x[0] for x in test_loss]), i)
-            writer.add_scalar('test_transition', np.mean([x[1] for x in test_loss]), i)
 
 
         writer.close()

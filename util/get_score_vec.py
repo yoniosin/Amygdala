@@ -70,4 +70,4 @@ class Regressor(nn.Module):
 if __name__ == '__main__':
     ds_location = Path('data')
     train_dl = torch.load(ds_location / 'train.pt')
-    test_dl = torch.load(ds_location / 'test.pt')
+    test_dl = torch.load(ds_location / 'test_o.pt')

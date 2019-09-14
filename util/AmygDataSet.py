@@ -8,28 +8,37 @@ import json
 import re
 
 
-class AmygDataset(Dataset):
+class BaseAmygDataSet(Dataset):
+    @staticmethod
+    def create_one_hot(idx):
+        vec = torch.zeros(105)
+        vec[idx] = 1
+        return vec
+
+
+class AmygDataset(BaseAmygDataSet):
     def __init__(self, subjects_path: Path, md: LearnerMetaData, load=False):
         if load:
             bold_file_name = os.path.join('data', '_'.join(('3d', 'dataset.pt')))
             if os.path.isfile(bold_file_name):
                 self.data = torch.load(bold_file_name)
-            else: raise IOError('Missing Train File')
+            else:
+                raise IOError('Missing Train File')
         else:
             self.subjects_dict = {}
-            def create_one_hot(idx):
-                vec = torch.zeros(105)
-                vec[idx] = 1
-                return vec
 
-            for i, subject_path in enumerate(subjects_path.iterdir()):
+            valid_sub = json.load(open('MetaData/valid.json', 'r'))
+            i = 0
+            for subject_path in subjects_path.iterdir():
                 subject = pickle.load(open(str(subject_path), 'rb'))
-                data = subject.get_data(train_num=md.train_windows, width=md.min_w, scalar_result=False)
                 subject_num = int(re.search(r'(\d{3})$', subject.name).group(1))
-                subject_score = subject.get_score(md.train_windows)
-                subject_one_hot = create_one_hot(subject_num)
+                if str(subject_num) in valid_sub.keys():
+                    data = subject.get_data(train_num=md.train_windows, width=md.min_w, scalar_result=False)
+                    subject_score = subject.get_score(md.train_windows)
+                    subject_one_hot = self.create_one_hot(subject_num)
 
-                self.subjects_dict[i] = (subject_num, data, (subject_score), subject_one_hot)
+                    self.subjects_dict[i] = (subject_num, data, (subject_score), subject_one_hot)
+                    i += 1
 
         self.train_len = int(len(self) * md.train_ratio)
         self.test_len = len(self) - self.train_len
@@ -37,7 +46,8 @@ class AmygDataset(Dataset):
     def save(self):
         torch.save(self.data, open('_'.join(('3d', 'dataset.pt')), 'wb'))
 
-    def __len__(self): return len(self.subjects_dict)
+    def __len__(self):
+        return len(self.subjects_dict)
 
     def __getitem__(self, item):
         subject = self.data[item]
@@ -46,7 +56,8 @@ class AmygDataset(Dataset):
         active = subject[-1, 1]
         return history, passive, active
 
-    def get_sample_shape(self): return self.subjects_dict[0][1].shape
+    def get_sample_shape(self):
+        return self.subjects_dict[0][1].shape
 
 
 class GlobalAmygDataset(AmygDataset):
@@ -72,11 +83,11 @@ class SequenceAmygDataset(AmygDataset):
 
         return subject_num, passive, active, subject_score, subject_one_hot
 
+    def get_subjects_list(self):
+        return list(map(lambda x: x[0].item(), self))
+
+
 if __name__ == '__main__':
     md_ = LearnerMetaData()
     ds = GlobalAmygDataset(Path('../../timeseries/Data/3D'), md_)
     print('data')
-
-
-
-

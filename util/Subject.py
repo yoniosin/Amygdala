@@ -47,9 +47,9 @@ class Subject:
     def __len__(self):
         return len(self.paired_windows)
     
-    def get_score(self, train_windows): 
-        #return np.mean([pw.score for pw in self.paired_windows[:train_windows]])
-        return (self.paired_windows[0].watch_window.mean, self.paired_windows[0].regulate_window.mean)
+    def get_score(self, last_window):
+        return [pw.means for pw in self.paired_windows[:last_window]]
+        # return self.paired_windows[0].watch_window.mean, self.paired_windows[0].regulate_window.mean
     
     def calc_score(self): 
         for pw in self.paired_windows:
@@ -77,6 +77,9 @@ class PairedWindows:
     def get_data(self, width):
         res = torch.stack([w.get_data(width) for w in (self.watch_window, self.regulate_window)])
         return res
+
+    @property
+    def means(self): return self.watch_window.mean, self.regulate_window.mean
 
 
 class Window:
