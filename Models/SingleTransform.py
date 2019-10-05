@@ -1,15 +1,15 @@
 from util.config import LearnerMetaData
 from torch import nn, optim
-from torch.autograd import Variable
 import progressbar
 import numpy as np
 import torch
-from Models.PCLSTM import PCLSTM
+from Models.EmbeddingLSTM import EmbeddingLSTM
 from torch.utils.tensorboard import SummaryWriter
-from functools import reduce
+from torch.autograd import Variable
 
 
 class STNet(nn.Module):
+    """This Module finds a mapping between passive windows to active windows, using a FCN"""
     def __init__(self, **kwargs):
         super().__init__()
         input_shape = kwargs['input_shape']
@@ -19,13 +19,6 @@ class STNet(nn.Module):
             in_size = sizes[i]
             out_size = sizes[i+1]
             setattr(self, f'l{i}', nn.Linear(input_shape[-1] * in_size, input_shape[-1] * out_size))
-
-    def activation(self, i):
-        if i % 2 == 0:
-            return nn.ReLU()
-        if i < self.layers_n / 2:
-            return nn.Dropout()
-        return nn.Sigmoid()
 
     def forward(self, x):
         for i in range(self.layers_n):
@@ -37,28 +30,41 @@ class STNet(nn.Module):
 
 
 class SequenceTransformNet(nn.Module):
-    def __init__(self, input_shape, hidden_size, **kwargs):
+    """
+    Using a Single Transformation, this module maps a series of [Active, Passive]+ last Passive to the last Active
+    [P P
+          + P ---> A
+     A A]
+    """
+
+    def __init__(self, batch_size, input_shape, hidden_size, use_embeddings):
         super().__init__()
-        self.single_transform = torch.load(open('single_run.pt', 'rb'))
-        self.rnn = PCLSTM(1600, [hidden_size], transition_phases=kwargs.get('transition_phases'), allow_transition=kwargs.get('allow_transition', False))
-        phases = input_shape[0]
-        t = input_shape[-1]
-        spacial_size = reduce(lambda a, b: a*b, input_shape[-4:])
-        self.fc = nn.Linear(t * phases * hidden_size, phases * spacial_size)
+        self.single_transform = torch.load(open('single_run.pt', 'rb'))  # load preciously trained ST
+        phases, _, height, width, depth, phase_len = input_shape
+        seq_len = phases * phase_len
+        self.out_sizes = [height, width, depth, seq_len]
+        spacial_size = height * width * depth
+
+        # create Seq2Seq NN
+        # 2 factor is because we concat recent history [Xt|Yt-1]
+        self.rnn = EmbeddingLSTM(2 * spacial_size, [hidden_size], use_embeddings)
+        self.fc1 = nn.Linear(seq_len * hidden_size, seq_len * spacial_size)
+        self.fc2 = nn.Linear(42, 1)
 
     def forward(self, x, subject_id, y):
         split = torch.split(x, 1, dim=1)
         xT = torch.cat([self.single_transform(x_i) for x_i in split], dim=-1)
         rnn_out, c_out = self.rnn(xT.squeeze(1), subject_id, y)
-        y = self.fc(rnn_out.view(x.shape[0], -1)).view(x.shape[0], 10, 8, 10, 42)
-        return y, c_out
+        y = self.fc1(rnn_out.view(x.shape[0], -1)).view(x.shape[0], *self.out_sizes)
+        # y = self.fc2(nn.ReLU()(y))
+        return y.squeeze(-1), c_out
 
 
 class BaseModel:
     def __init__(self,  input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, net_type, name='sqeuence'):
         self.batch_size = md.batch_size
-        self.transition_phases = md.transition_phases
-        self.net = net_type(input_shape, hidden_size, allow_transition=md.allow_transition)
+        self.n_windows = md.train_windows + 1
+        self.net = net_type(md.batch_size, input_shape, hidden_size, md.use_embeddings)
         self.name = name
         self.train_dl = train_dl
         self.test_dl = test_dl
@@ -90,17 +96,15 @@ class BaseModel:
 
     def run_batch(self, batch, train: bool):
         subject_num, x, y, subject_score, subject_one_hot = batch
-        ds_shape = y.shape
-        y = y.view(ds_shape[0], *ds_shape[2:-1], ds_shape[1] * ds_shape[-1])
+        y = torch.cat([y[:, i] for i in range(self.n_windows)], dim=-1)  # concat active windows to long sequence
         input_ = Variable(x, requires_grad=train)
         target = Variable(y, requires_grad=False)
         output, c = self.net(input_, subject_one_hot, y)
 
         loss = self.loss_func(output, target)
-        transition_loss = self.loss_func(output[..., self.transition_phases], target[..., self.transition_phases])
         if train:
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-        return float(loss), float(transition_loss)
+        return float(loss), 0

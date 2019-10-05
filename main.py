@@ -40,22 +40,22 @@ def get_person_embedding(fc_layer):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('-t', action='store_true')
+    parser.add_argument('embed', type=str, choices=['none', 'init', 'concat'])
 
     args = parser.parse_args()
     run_num = json.load(open('runs/last_run.json', 'r'))['last'] + 1
-    print(args.t)
+    print(args.embed)
     md = LearnerMetaData(batch_size=20,
                          train_ratio=0.9,
                          run_num=run_num,
-                         allow_transition=args.t,
+                         use_embeddings=args.embed,
                          )
     load_model = True
     train_dl, test_dl, input_shape = load_data_set(SequenceAmygDataset, load=load_model)
     model = BaseModel(input_shape, 10, md, train_dl, test_dl, net_type=SequenceTransformNet)
     train_nn = True
     if train_nn:
-        model.train(40)
+        model.train(50)
         json.dump({"last": run_num}, open('runs/last_run.json', 'w'))
     else:
         model.net = torch.load('sqeuence_last_run.pt')

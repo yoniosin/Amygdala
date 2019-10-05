@@ -87,7 +87,13 @@ class SequenceAmygDataset(AmygDataset):
         return list(map(lambda x: x[0].item(), self))
 
 
-if __name__ == '__main__':
-    md_ = LearnerMetaData()
-    ds = GlobalAmygDataset(Path('../../timeseries/Data/3D'), md_)
-    print('data')
+class MeanAmygDataset(SequenceAmygDataset):
+    def __getitem__(self, item):
+        """Return global mean per voxel"""
+        subject_num, passive, active, subject_score, subject_one_hot = super().__getitem__(item)
+        active_mean = torch.mean(torch.mean(active, dim=0), dim=-1)
+        return subject_num, passive, active_mean, subject_score, subject_one_hot
+
+    def get_subjects_list(self):
+        return list(map(lambda x: x[0].item(), self))
+

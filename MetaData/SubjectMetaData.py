@@ -3,7 +3,7 @@ import torch
 import re
 import numpy as np
 from sklearn.svm import SVR
-from Classifier.Classifier import Regression
+from Classifier.Classifier import BaseRegression
 from pathlib import Path
 import json
 
@@ -68,14 +68,14 @@ if __name__ == '__main__':
     train_dl, test_dl = load_data_set()
     net = torch.load('../sqeuence_last_run.pt')
     svr_loss = []
-    for i in range(5):
+    for i in [0, 1]:
         (train_x, train_y), (test_x, test_y) = smd.create_labels(i)
         model = SVR(gamma='auto')
         model.fit(train_x, train_y)
         y_hat = model.predict(test_x)
         svr_loss.append(np.mean((test_y - y_hat) ** 2))
 
-        emb_reg = Regression(train_dl, test_dl, net.rnn.initilaizer, {**smd.train_dict, **smd.test_dict})
+        emb_reg = BaseRegression(train_dl, test_dl, net.rnn.initilaizer, {**smd.train_dict, **smd.test_dict}, 3)
         emb_reg.fit(500, i)
 
     print(f'svr_loss:{svr_loss}')
