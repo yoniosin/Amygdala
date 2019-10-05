@@ -3,6 +3,7 @@ from itertools import chain
 from abc import abstractmethod
 import torch
 import numpy as np
+import re
 
 
 class Subject:
@@ -30,6 +31,9 @@ class Subject:
             res = torch.stack([w.get_data(width) for w in self.get_windows(train_num + 1)])
             return res
 
+    @property
+    def subject_num(self): return int(re.search(r'(\d{3})$', name).group(1))
+
     def get_single_experience(self, idx, width):
         return self.paired_windows[idx].get_data(width)
 
@@ -42,20 +46,30 @@ class Subject:
 
     def __len__(self):
         return len(self.paired_windows)
+    
+    def get_score(self, last_window):
+        return [pw.means for pw in self.paired_windows[:last_window]]
+        # return self.paired_windows[0].watch_window.mean, self.paired_windows[0].regulate_window.mean
+    
+    def calc_score(self): 
+        for pw in self.paired_windows:
+            pw.calc_score()
 
 
 class PairedWindows:
     def __init__(self, watch_window, regulate_window):
-        def calc_score():
-            mean_diff = self.watch_window.mean - self.regulate_window.mean
-            joint_var = torch.var(torch.cat((self.watch_window.bold, self.regulate_window.bold), dim=3))
-            return mean_diff / joint_var
 
         assert watch_window.idx == regulate_window.idx, f'indices mismatch: {watch_window.idx} != {regulate_window.idx}'
         self.idx = watch_window.idx
         self.watch_window: Window = watch_window
         self.regulate_window: Window = regulate_window
-        self.score = calc_score()
+        self.calc_score()
+
+    def calc_score(self):
+        mean_diff = self.watch_window.mean - self.regulate_window.mean
+        joint_var = 1 #torch.var(torch.cat((self.watch_window.bold, self.regulate_window.bold), dim=3))
+        self.score = mean_diff / joint_var
+        return self.score
 
     def __repr__(self):
         return f'Windows #{self.idx}, score = {self.score:.4f}'
@@ -63,6 +77,9 @@ class PairedWindows:
     def get_data(self, width):
         res = torch.stack([w.get_data(width) for w in (self.watch_window, self.regulate_window)])
         return res
+
+    @property
+    def means(self): return self.watch_window.mean, self.regulate_window.mean
 
 
 class Window:
