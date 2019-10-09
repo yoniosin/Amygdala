@@ -6,6 +6,7 @@ import torch
 from Models.EmbeddingLSTM import EmbeddingLSTM
 from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
+from abc import abstractmethod
 
 
 class STNet(nn.Module):
@@ -101,10 +102,14 @@ class BaseModel:
         target = Variable(y, requires_grad=False)
         output, c = self.net(input_, subject_one_hot, y)
 
+        return float(self.optimizer_step(output, target, train)), 0
+
+    def optimizer_step(self, output, target, train):
         loss = self.loss_func(output, target)
         if train:
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-        return float(loss), 0
+        return loss
+

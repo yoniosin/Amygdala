@@ -9,7 +9,10 @@ import json
 
 
 class SubjectsMetaData:
-    """Receives path to csv file containing meta-data for all subjects, and dumps json file ready to use"""
+    """
+    Receives path to csv file containing meta-data for all subjects, and dumps json file ready to use.
+    Dumps a list of subjects with full meta-data
+    """
     def __init__(self, md_path: str, split_path: str):
         def create_subject():
             """Receives meta-data line of a subject, and returns needed values"""

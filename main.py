@@ -19,12 +19,12 @@ def load_data_set(ds_type, load):
     train_list, test_list = list(map(lambda e: e.get_subjects_list, (train_ds, test_ds)))
     json.dump({'train': train_list, 'test': test_list}, open('split.json', 'w'))
 
-    train_dl = DataLoader(train_ds, batch_size=md.batch_size, shuffle=True)
-    torch.save(train_dl, 'data/train_meta.pt')
-    test_dl = DataLoader(test_ds, batch_size=md.batch_size, shuffle=True)
-    torch.save(test_dl, 'data/test_meta.pt')
+    train_dl_ = DataLoader(train_ds, batch_size=md.batch_size, shuffle=True)
+    torch.save(train_dl_, 'data/train_meta.pt')
+    test_dl_ = DataLoader(test_ds, batch_size=md.batch_size, shuffle=True)
+    torch.save(test_dl_, 'data/test_meta.pt')
     # torch.save(ds.get_sample_shape(), 'data/input_shape.pt')
-    return train_dl, test_dl, ds.get_sample_shape()
+    return train_dl_, test_dl_, ds.get_sample_shape()
 
 
 def get_person_embedding(fc_layer):

@@ -74,6 +74,7 @@ class SubjectMetaData:
     regulate_on: List[int]
     regulate_duration: List[int]
     initial_delay: int = 2
+    subject_type: str = 'healthy'
 
     def gen_time_range(self, on, duration): return list(range(on + self.initial_delay, on + duration))
 
