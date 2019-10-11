@@ -51,9 +51,9 @@ class AmygDataSet(Dataset):
 
     def get_subject_data(self, subject, subject_num, train_windows, min_w):
         """:returns data, score, one_hot encoding"""
-        return (subject.get_data(train_windows, min_w),
-                subject.get_score(train_windows),
-                self.create_one_hot(subject_num))
+        return {'data': subject.get_data(train_windows, min_w),
+                'score': subject.get_score(train_windows),
+                'one_hot': self.create_one_hot(subject_num)}
 
     def __len__(self): return len(self.subjects_dict)
 
@@ -74,7 +74,7 @@ class SingleLabeledAmygDataSet(AmygDataSet):
 
     def get_subject_data(self, subject, subject_num, train_windows, min_w):
         """:returns label, data, score, one_hot encoding"""
-        return (self.sub_type, *super().get_subject_data(subject, subject_num, train_windows, min_w))
+        return {'label': self.sub_type, **super().get_subject_data(subject, subject_num, train_windows, min_w)}
 
 
 def create_multi_labeled_amyg_dataset(md: LearnerMetaData, paths: Iterable[Iterable[Path, str]]):

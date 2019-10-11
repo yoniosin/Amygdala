@@ -6,82 +6,6 @@ import numpy as np
 import re
 
 
-class Subject:
-    voxels_md = None
-
-    def __init__(self, meta_data: SubjectMetaData, bold_mat, window_data_type):
-        def gen_windows(window_type):
-            times_list = self.meta_data.watch_times if window_type == 'watch' else self.meta_data.regulate_times
-            return map(lambda w: window_data_type(*w, window_type, bold_mat), enumerate(times_list))
-
-        self.meta_data = meta_data
-        self.name = meta_data.subject_name
-        self.paired_windows = list(map(PairedWindows, gen_windows('watch'), gen_windows('regulate')))
-
-    def get_data(self, train_num, width, scalar_result=True):
-        if scalar_result:
-            prev_data = list(chain(*[w.get_data(width) for w in self.get_windows(train_num)]))
-
-            last_pw = self.paired_windows[train_num]
-            last_data = last_pw.get_data(width)
-            X = np.hstack(prev_data + last_data)
-            y = last_pw.score
-            return X, y
-        else:
-            res = torch.stack([w.get_data(width) for w in self.get_windows(train_num + 1)])
-            return res
-
-    @property
-    def subject_num(self): return int(re.search(r'(\d{3})$', name).group(1))
-
-    def get_single_experience(self, idx, width):
-        return self.paired_windows[idx].get_data(width)
-
-    def __repr__(self):
-        grades = [pw.score for pw in self.paired_windows]
-        grades_formatted = ("{:.2f}, " * len(grades)).format(*grades)
-        return f'{self.name} windows grades=[{grades_formatted}]'
-
-    def get_windows(self, windows_num): return self.paired_windows[:windows_num]
-
-    def __len__(self):
-        return len(self.paired_windows)
-    
-    def get_score(self, last_window):
-        return [pw.means for pw in self.paired_windows[:last_window]]
-        # return self.paired_windows[0].watch_window.mean, self.paired_windows[0].regulate_window.mean
-    
-    def calc_score(self): 
-        for pw in self.paired_windows:
-            pw.calc_score()
-
-
-class PairedWindows:
-    def __init__(self, watch_window, regulate_window):
-
-        assert watch_window.idx == regulate_window.idx, f'indices mismatch: {watch_window.idx} != {regulate_window.idx}'
-        self.idx = watch_window.idx
-        self.watch_window: Window = watch_window
-        self.regulate_window: Window = regulate_window
-        self.calc_score()
-
-    def calc_score(self):
-        mean_diff = self.watch_window.mean - self.regulate_window.mean
-        joint_var = 1 #torch.var(torch.cat((self.watch_window.bold, self.regulate_window.bold), dim=3))
-        self.score = mean_diff / joint_var
-        return self.score
-
-    def __repr__(self):
-        return f'Windows #{self.idx}, score = {self.score:.4f}'
-
-    def get_data(self, width):
-        res = torch.stack([w.get_data(width) for w in (self.watch_window, self.regulate_window)])
-        return res
-
-    @property
-    def means(self): return self.watch_window.mean, self.regulate_window.mean
-
-
 class Window:
     def __init__(self, idx, time_slots, window_type, bold_mat):
         self.idx = idx
@@ -128,6 +52,82 @@ class Window3D(Window):
         return torch.tensor(x[:, :, :, self.time])
 
     def get_data(self, width): return self.bold[:, :, :, :width]
+
+
+class PairedWindows:
+    def __init__(self, watch_window, regulate_window):
+
+        assert watch_window.idx == regulate_window.idx, f'indices mismatch: {watch_window.idx} != {regulate_window.idx}'
+        self.idx = watch_window.idx
+        self.watch_window: Window = watch_window
+        self.regulate_window: Window = regulate_window
+        self.calc_score()
+
+    def calc_score(self):
+        mean_diff = self.watch_window.mean - self.regulate_window.mean
+        joint_var = 1 #torch.var(torch.cat((self.watch_window.bold, self.regulate_window.bold), dim=3))
+        self.score = mean_diff / joint_var
+        return self.score
+
+    def __repr__(self):
+        return f'Windows #{self.idx}, score = {self.score:.4f}'
+
+    def get_data(self, width):
+        res = torch.stack([w.get_data(width) for w in (self.watch_window, self.regulate_window)])
+        return res
+
+    @property
+    def means(self): return float(self.watch_window.mean), float(self.regulate_window.mean)
+
+
+class Subject:
+    voxels_md = None
+
+    def __init__(self, meta_data: SubjectMetaData, bold_mat, window_data_type=Window3D):
+        def gen_windows(window_type):
+            times_list = self.meta_data.watch_times if window_type == 'watch' else self.meta_data.regulate_times
+            return map(lambda w: window_data_type(*w, window_type, bold_mat), enumerate(times_list))
+
+        self.meta_data = meta_data
+        self.name = meta_data.subject_name
+        self.paired_windows = list(map(PairedWindows, gen_windows('watch'), gen_windows('regulate')))
+
+    def get_data(self, train_num, width, scalar_result=True):
+        if scalar_result:
+            prev_data = list(chain(*[w.get_data(width) for w in self.get_windows(train_num)]))
+
+            last_pw = self.paired_windows[train_num]
+            last_data = last_pw.get_data(width)
+            X = np.hstack(prev_data + last_data)
+            y = last_pw.score
+            return X, y
+        else:
+            res = torch.stack([w.get_data(width) for w in self.get_windows(train_num + 1)])
+            return res
+
+    # @property
+    # def subject_num(self): return int(re.search(r'(\d{3})$', name).group(1))
+
+    def get_single_experience(self, idx, width):
+        return self.paired_windows[idx].get_data(width)
+
+    def __repr__(self):
+        grades = [pw.score for pw in self.paired_windows]
+        grades_formatted = ("{:.2f}, " * len(grades)).format(*grades)
+        return f'{self.name} windows grades=[{grades_formatted}]'
+
+    def get_windows(self, windows_num): return self.paired_windows[:windows_num]
+
+    def __len__(self):
+        return len(self.paired_windows)
+    
+    def get_score(self, last_window):
+        return [pw.means for pw in self.paired_windows[:last_window]]
+        # return self.paired_windows[0].watch_window.mean, self.paired_windows[0].regulate_window.mean
+    
+    def calc_score(self): 
+        for pw in self.paired_windows:
+            pw.calc_score()
 
 
 def subject_generator(subject_id, protocol, bold_mat, data_type='3d'):

@@ -2,16 +2,15 @@ from dataclasses import dataclass, asdict, field
 from typing import List
 import json
 import numpy as np
-# from oct2py import Oct2Py
+from oct2py import Oct2Py
 from pathlib import Path
 
 
 def load_mat(path):
-    # oc = Oct2Py()
-    # ans = oc.convert_img(path)
-    # oc.exit()
-    # return ans
-    return 0
+    oc = Oct2Py()
+    ans = oc.convert_img(path)
+    oc.exit()
+    return ans
 
 
 def get_roi_md(dict_path=Path('../PreProcess/voxels_dict.txt'), raw_roi_path='../raw_data/ROI.mat'):
