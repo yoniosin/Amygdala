@@ -17,9 +17,10 @@ class STNet(nn.Module):
         sizes = [1, 2, 4, 8, 8, 4, 2, 1]
         self.layers_n = len(sizes) - 1
         for i in range(self.layers_n):
+            input_size = input_shape[-1]
             in_size = sizes[i]
             out_size = sizes[i+1]
-            setattr(self, f'l{i}', nn.Linear(input_shape[-1] * in_size, input_shape[-1] * out_size))
+            setattr(self, f'l{i}', nn.Linear(input_size * in_size, input_size * out_size))
 
     def forward(self, x):
         for i in range(self.layers_n):
@@ -49,7 +50,7 @@ class SequenceTransformNet(nn.Module):
         # 2 factor is because we concat recent history [Xt|Yt-1]
         self.rnn = EmbeddingLSTM(2 * spacial_size, [hidden_size], use_embeddings)
         self.fc1 = nn.Linear(seq_len * hidden_size, seq_len * spacial_size)
-        self.fc2 = nn.Linear(seq_len, output_size)
+        self.fc2 = nn.Linear(seq_len, output_size[-1])
 
     def forward(self, x, subject_id, y):
         split = torch.split(x, 1, dim=1)
@@ -117,8 +118,8 @@ class BaseModel:
 
 class ReconstructingModel(BaseModel):
     def calc_signals(self, batch, train):
-        x = batch['data'][:, 0]
-        y = batch['data'][:, 1]
+        x = batch['data'][:, :, 0]
+        y = batch['data'][:, :, 1]
         y = torch.cat([y[:, i] for i in range(self.n_windows)], dim=-1)  # concat active windows to long sequence
         input_ = Variable(x, requires_grad=train)
         target = Variable(y, requires_grad=False)
@@ -127,7 +128,7 @@ class ReconstructingModel(BaseModel):
         return output, target
 
     def build_NN(self, input_shape, hidden_size, use_embeddings):
-        return SequenceTransformNet(input_shape, hidden_size, use_embeddings)
+        return SequenceTransformNet(input_shape, hidden_size,input_shape, use_embeddings)
 
 
 class ClassifyingModel(BaseModel):

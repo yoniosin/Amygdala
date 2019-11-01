@@ -17,7 +17,7 @@ def get_roi_md(dict_path=Path('../PreProcess/voxels_dict.txt'), raw_roi_path='..
     if dict_path.exists():
         return ROIData(**json.load(open(str(dict_path), 'r')))
 
-    roi = np.where(load_mat(raw_roi_path))
+    roi = np.where(load_mat(str(raw_roi_path)))
     amyg_vox = [(int(vox[0]), int(vox[1]), int(vox[2])) for vox in zip(*roi)]
     min_h, min_w, min_d = list(map(min, roi))
     max_h, max_w, max_d = list(map(max, roi))
@@ -82,3 +82,6 @@ class SubjectMetaData:
         self.watch_times = map(self.gen_time_range, self.watch_on, self.watch_duration)
         self.regulate_times = map(self.gen_time_range, self.regulate_on, self.regulate_duration)
 
+
+if __name__ == '__main__':
+    get_roi_md(Path(r'rawData/voxels_dict.json'), Path(r'raw_data/rrAmygd_ptsd.nii'))

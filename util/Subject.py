@@ -22,6 +22,9 @@ class Window:
     @property
     def mean(self): return torch.mean(self.bold)
 
+    @property
+    def std(self): return torch.std(self.bold)
+
 
 class FlatWindow(Window):
     def __init__(self, idx, time_slots, window_type, bold_mat):
@@ -42,9 +45,6 @@ class FlatWindow(Window):
 
 
 class Window3D(Window):
-    def __init__(self, idx, time_slots, window_type, bold_mat):
-        super().__init__(idx, time_slots, window_type, bold_mat)
-
     def gen_bold_mat(self, bold_mat):
         x = bold_mat[Subject.voxels_md.h_range, :, :, :]
         x = x[:, Subject.voxels_md.w_range, :, :]
@@ -52,6 +52,8 @@ class Window3D(Window):
         return torch.tensor(x[:, :, :, self.time])
 
     def get_data(self, width): return self.bold[:, :, :, :width]
+
+    def __repr__(self): return f'{self.window_type}# {self.idx}: mean={self.mean}, std={self.std}'
 
 
 class PairedWindows:
@@ -128,6 +130,9 @@ class Subject:
     def calc_score(self): 
         for pw in self.paired_windows:
             pw.calc_score()
+
+
+
 
 
 def subject_generator(subject_id, protocol, bold_mat, data_type='3d'):
