@@ -132,5 +132,8 @@ class ReconstructingModel(BaseModel):
 
 
 class ClassifyingModel(BaseModel):
+    def build_NN(self, input_shape, hidden_size, use_embeddings):
+        pass
+
     def calc_signals(self, batch, train):
         subject_num, label, data, subject_score, subject_one_hot = batch
