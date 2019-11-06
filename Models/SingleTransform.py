@@ -89,6 +89,26 @@ class ClassifyingNetwork(nn.Module):
         return all_results
 
 
+class ClassifyingBaseLine(nn.Module):
+    def __init__(self, n_classes, stats_per_time, seq_len, n_windows):
+        super().__init__()
+        self.n_windows = n_windows
+        self.fc = nn.Linear(stats_per_time * seq_len, n_classes)
+
+    def forward(self, x):
+        mean_list = []
+        var_list = []
+        for subject in x:
+            flattened_time = torch.cat([subject[i] for i in range(self.n_windows)], dim=-1)
+            mean_list.append(torch.mean(flattened_time.view(flattened_time.size(-1), -1), dim=-1))
+            var_list.append(torch.var(flattened_time.view(flattened_time.size(-1), -1), dim=-1))
+
+        all_results = torch.cat((torch.stack(mean_list), torch.stack(var_list)), dim=1)
+        y = nn.Softmax()(self.fc(all_results))
+        return y
+
+
+
 class BaseModel:
     def __init__(self,  input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, name='sqeuence'):
         self.name = name
@@ -171,7 +191,8 @@ class ClassifyingModel(BaseModel):
         super().__init__(input_shape, hidden_size, md, train_dl, test_dl)
 
     def build_NN(self, input_shape, hidden_size, use_embeddings):
-        return ClassifyingNetwork(2, 10, 3, 6, n_windows=3, seq_len=42)
+        #return ClassifyingNetwork(2, 10, 3, 6, n_windows=3, seq_len=42)
+        return ClassifyingBaseLine(2, 2, 42, 3)
 
     def calc_signals(self, batch, train):
         def create_target(label):
