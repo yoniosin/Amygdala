@@ -3,15 +3,14 @@ from itertools import chain
 from abc import abstractmethod
 import torch
 import numpy as np
-import re
 
 
 class Window:
-    def __init__(self, idx, time_slots, window_type, bold_mat):
+    def __init__(self, idx, time_slots, window_type, bold_mat, voxels_md):
         self.idx = idx
         self.time = time_slots
         self.window_type = window_type
-        self.bold = self.gen_bold_mat(bold_mat)
+        self.bold = self.gen_bold_mat(bold_mat, voxels_md)
 
     @abstractmethod
     def gen_bold_mat(self, *args): pass
@@ -27,7 +26,7 @@ class Window:
 
 
 class FlatWindow(Window):
-    def __init__(self, idx, time_slots, window_type, bold_mat):
+    def __init__(self, idx, time_slots, window_type, bold_mat, voxels_md):
         class Voxel:
             def __init__(self, vox_coor, samples):
                 self.vox_coor = vox_coor
@@ -35,7 +34,7 @@ class FlatWindow(Window):
 
             def __repr__(self):
                 return f"vox {self.vox_coor}"
-        self.voxels = {vox: Voxel(vox, bold_mat[(*vox), time_slots]) for vox in Subject.voxels_md.amyg_vox}
+        self.voxels = {vox: Voxel(vox, bold_mat[(*vox), time_slots]) for vox in voxels_md.amyg_vox}
         super().__init__(idx, time_slots, window_type, bold_mat)
 
     def gen_bold_mat(self, bold_mat):
@@ -45,10 +44,10 @@ class FlatWindow(Window):
 
 
 class Window3D(Window):
-    def gen_bold_mat(self, bold_mat):
-        x = bold_mat[Subject.voxels_md.h_range, :, :, :]
-        x = x[:, Subject.voxels_md.w_range, :, :]
-        x = x[:, :, Subject.voxels_md.d_range, :]
+    def gen_bold_mat(self, bold_mat, voxels_md):
+        x = bold_mat[voxels_md.h_range, :, :, :]
+        x = x[:, voxels_md.w_range, :, :]
+        x = x[:, :, voxels_md.d_range, :]
         return torch.tensor(x[:, :, :, self.time])
 
     def get_data(self, width): return self.bold[:, :, :, :width]
@@ -83,12 +82,10 @@ class PairedWindows:
 
 
 class Subject:
-    voxels_md = None
-
     def __init__(self, meta_data: SubjectMetaData, bold_mat, window_data_type=Window3D):
-        def gen_windows(window_type):
-            times_list = self.meta_data.watch_times if window_type == 'watch' else self.meta_data.regulate_times
-            return map(lambda w: window_data_type(*w, window_type, bold_mat), enumerate(times_list))
+        def gen_windows(wind_type):
+            times_list = self.meta_data.watch_times if wind_type == 'watch' else self.meta_data.regulate_times
+            return map(lambda w: window_data_type(*w, wind_type, bold_mat, self.get_voxels_md()), enumerate(times_list))
 
         self.meta_data = meta_data
         self.name = meta_data.subject_name
@@ -104,7 +101,7 @@ class Subject:
             y = last_pw.score
             return X, y
         else:
-            res = torch.stack([w.get_data(width) for w in self.get_windows(train_num + 1)])
+            res = torch.stack([w.get_data(width) for w in self.get_windows(train_num + 1)]).float()
             return res
 
     # @property
@@ -116,7 +113,7 @@ class Subject:
     def __repr__(self):
         grades = [pw.score for pw in self.paired_windows]
         grades_formatted = ("{:.2f}, " * len(grades)).format(*grades)
-        return f'{self.name} windows grades=[{grades_formatted}]'
+        return f'{self.name}, windows grades=[{grades_formatted}]'
 
     def get_windows(self, windows_num): return self.paired_windows[:windows_num]
 
@@ -131,8 +128,38 @@ class Subject:
         for pw in self.paired_windows:
             pw.calc_score()
 
+    @abstractmethod
+    def get_voxels_md(self): pass
+
+    def get_type(self): return 'healthy'
 
 
+class HealthySubject(Subject):
+    voxels_md = None
+
+    def __init__(self, meta_data: SubjectMetaData, bold_mat):
+        self.subject_type = 'healthy'
+        super().__init__(meta_data, bold_mat)
+
+    def get_voxels_md(self): return HealthySubject.voxels_md
+
+    def get_type(self): return 'healthy'
+
+    def __repr__(self): return f'{self.subject_type} subject #' + super().__repr__()
+
+
+class PTSDSubject(Subject):
+    voxels_md = None
+
+    def __init__(self, meta_data: SubjectMetaData, bold_mat):
+        self.subject_type = 'PTSD'
+        super().__init__(meta_data, bold_mat)
+
+    def get_voxels_md(self): return PTSDSubject.voxels_md
+
+    def __repr__(self): return f'{self.subject_type} subject #' + super().__repr__()
+
+    def get_type(self): return 'PTSD'
 
 
 def subject_generator(subject_id, protocol, bold_mat, data_type='3d'):

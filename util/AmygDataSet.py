@@ -6,7 +6,7 @@ import pickle
 import os
 import json
 import re
-from typing import Iterable, Tuple
+from typing import Iterable
 
 
 class AmygDataSet(Dataset):
@@ -15,22 +15,23 @@ class AmygDataSet(Dataset):
     :param subjects_path - path to pre-created json files containing subject's data
     :param md - meta-data objects"""
 
-    def __init__(self, subjects_path: Path, md: LearnerMetaData, load=False):
+    def __init__(self, subjects_path: Iterable[Path], md: LearnerMetaData, load=False):
         self.subjects_dict = self.load_ds() if load else self.build_ds(subjects_path, md)
         self.train_len = int(len(self) * md.train_ratio)
         self.test_len = len(self) - self.train_len
 
-    def build_ds(self, subjects_path: Path, md: LearnerMetaData):
+    def build_ds(self, subjects_dir_iter: Iterable[Path], md: LearnerMetaData):
         """:returns dictionary with subjects data, which is constructed using get_subject_data()"""
         res_dict = {}
 
         i = 0
-        for subject_path in subjects_path.iterdir():
-            sub = pickle.load(open(str(subject_path), 'rb'))
-            sub_num = int(re.search(r'(\d{3})$', sub.name).group(1))
-            if self.is_subject_valid(sub_num):
-                res_dict[i] = {'sub_num': sub_num, **self.get_subject_data(sub, sub_num, md.train_windows, md.min_w)}
-                i += 1
+        for subjects_dir in subjects_dir_iter:
+            for subject_path in subjects_dir.iterdir():
+                sub = pickle.load(open(str(subject_path), 'rb'))
+                sub_num = int(re.search(r'(\d{3})$', sub.name).group(1))
+                if self.is_subject_valid(sub_num):
+                    res_dict[i] = {'sub_num': sub_num, **self.get_subject_data(sub, sub_num, md.train_windows, md.min_w)}
+                    i += 1
 
         return res_dict
 
@@ -52,10 +53,15 @@ class AmygDataSet(Dataset):
         return vec
 
     def get_subject_data(self, subject, subject_num, train_windows, min_w):
-        """:returns data, score, one_hot encoding"""
-        return {'data': subject.get_data(train_windows, min_w, scalar_result=False),
+        """:returns passive, active, score, one_hot encoding"""
+        data = subject.get_data(train_windows, min_w, scalar_result=False)
+
+        return {'data': data,
+                # 'active': data[:, 1],
+                'input_shape': data.shape,
                 'score': subject.get_score(train_windows),
-                'one_hot': self.create_one_hot(subject_num)}
+                # 'one_hot': self.create_one_hot(subject_num),
+                'type': subject.get_type()}
 
     def __len__(self):
         return len(self.subjects_dict)
@@ -64,31 +70,13 @@ class AmygDataSet(Dataset):
         return self.subjects_dict[item]
 
     def get_sample_shape(self):
-        return self.subjects_dict[0]['data'].shape
+        return self.subjects_dict[0]['input_shape']
 
     def get_subjects_list(self):
         return list(map(lambda x: x[0].item(), self))
 
     def save(self):
         torch.save(self.subjects_dict, open('_'.join(('3d', 'dataset.pt')), 'wb'))
-
-
-class SingleLabeledAmygDataSet(AmygDataSet):
-    """Add subject's label to the dataset"""
-
-    def __init__(self, md: LearnerMetaData, subjects_path: Path, subjects_label):
-        self.sub_type = subjects_label
-        super().__init__(subjects_path, md)
-
-    def get_subject_data(self, subject, subject_num, train_windows, min_w):
-        """:returns label, data, score, one_hot encoding"""
-        return {'label': self.sub_type, **super().get_subject_data(subject, subject_num, train_windows, min_w)}
-
-
-def create_multi_labeled_amyg_dataset(md: LearnerMetaData, paths: Iterable[Tuple[Path, str]]):
-    """Receives an iterable of tuples of sort (path, label) and returns a unified pytorch ConcatDataset"""
-    datasets = [SingleLabeledAmygDataSet(md, *path) for path in paths]
-    return ConcatDataset(datasets)
 
 
 class ScoresAmygDataset(AmygDataSet):

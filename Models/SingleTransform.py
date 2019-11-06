@@ -61,6 +61,34 @@ class SequenceTransformNet(nn.Module):
         return y.squeeze(-1), c_out
 
 
+class ClassifyingNetwork(nn.Module):
+    def __init__(self, n_classes, n_filter, conv_kernel_size, embedding_size, n_windows, seq_len):
+        super().__init__()
+        self.n_windows = n_windows
+        self.seq_len = seq_len
+        self.conv = nn.Conv3d(2, n_filter, conv_kernel_size)
+        self.mlp = nn.Sequential(nn.Linear(n_filter, embedding_size),
+                                 nn.Sigmoid(),
+                                 nn.Linear(embedding_size, embedding_size))
+        self.final_fc = nn.Linear(42 * embedding_size, n_classes)
+
+    def forward(self, x):
+        all_results = []
+        for subject in x:
+            flattened_time = torch.cat([subject[i] for i in range(self.n_windows)], dim=-1).unsqueeze(0)
+            all_representations = []
+            for t in range(self.seq_len):
+                x1 = self.conv(flattened_time[..., t])
+                all_representations.append(x1.mean(dim=(2, 3, 4)))
+
+            conv_out = nn.Dropout(p=0.0)(torch.stack(all_representations, dim=1))
+            all_representations = self.mlp(conv_out)
+            res = nn.Softmax(dim=1)(self.final_fc(all_representations.view(1, -1)))
+            all_results.append(res)
+        all_results = torch.stack(all_results).squeeze(1)
+        return all_results
+
+
 class BaseModel:
     def __init__(self,  input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, name='sqeuence'):
         self.name = name
@@ -70,8 +98,7 @@ class BaseModel:
         self.test_dl = test_dl
         self.run_name = md.run_name
         self.net = self.build_NN(input_shape, hidden_size, md.use_embeddings)
-        self.loss_func = nn.MSELoss()
-        self.optimizer = optim.Adam(self.net.parameters(), lr=2e-1, weight_decay=0)
+        self.optimizer = optim.Adam(self.net.parameters(), lr=2e-3, weight_decay=0)
 
     @abstractmethod
     def build_NN(self, input_shape, hidden_size, use_embeddings): pass
@@ -80,10 +107,12 @@ class BaseModel:
         bar = progressbar.ProgressBar()
         writer = SummaryWriter(self.run_name)
         for i in bar(range(n_epochs)):
-            train_loss = self.run_model(train=True)
-            writer.add_scalar('train', np.mean([x[0] for x in train_loss]), i)
-            test_loss = self.test()
-            writer.add_scalar('test', np.mean([x[0] for x in test_loss]), i)
+            train_loss, train_accuracy = list(zip(*self.run_model(train=True)))
+            writer.add_scalar('train_loss', np.mean(train_loss), i)
+            writer.add_scalar('train_accuracy', np.mean(train_accuracy), i)
+            test_loss, test_accuracy = list(zip(*self.test()))
+            writer.add_scalar('test_loss', np.mean(test_loss), i)
+            writer.add_scalar('test_accuracy', np.mean(test_accuracy), i)
 
         writer.close()
         torch.save(self.net, f'{self.name}_last_run.pt')
@@ -100,8 +129,9 @@ class BaseModel:
     def run_batch(self, batch, train: bool):
         output, target = self.calc_signals(batch, train)
         loss = self.optimizer_step(output, target, train)
+        accuracy = list(map(lambda o, t: torch.argmax(o) == torch.argmax(t), output, target))
 
-        return float(loss), 0
+        return float(loss), np.mean(accuracy)
 
     @abstractmethod
     def calc_signals(self, batch, train): pass
@@ -117,9 +147,13 @@ class BaseModel:
 
 
 class ReconstructingModel(BaseModel):
+    def __init__(self, input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl):
+        self.loss_func = nn.MSELoss()
+        super().__init__(input_shape, hidden_size, md, train_dl, test_dl)
+
     def calc_signals(self, batch, train):
-        x = batch['data'][:, :, 0]
-        y = batch['data'][:, :, 1]
+        x = batch['passive']
+        y = batch['active']
         y = torch.cat([y[:, i] for i in range(self.n_windows)], dim=-1)  # concat active windows to long sequence
         input_ = Variable(x, requires_grad=train)
         target = Variable(y, requires_grad=False)
@@ -132,8 +166,17 @@ class ReconstructingModel(BaseModel):
 
 
 class ClassifyingModel(BaseModel):
+    def __init__(self, input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl):
+        self.loss_func = nn.BCELoss()
+        super().__init__(input_shape, hidden_size, md, train_dl, test_dl)
+
     def build_NN(self, input_shape, hidden_size, use_embeddings):
-        pass
+        return ClassifyingNetwork(2, 10, 3, 6, n_windows=3, seq_len=42)
 
     def calc_signals(self, batch, train):
-        subject_num, label, data, subject_score, subject_one_hot = batch
+        def create_target(label):
+            if label == 'healthy': return torch.tensor((1, 0))
+            else: return torch.tensor((0, 1))
+
+        target = torch.stack([create_target(label) for label in batch['type']]).float()
+        return self.net(batch['data']), target
