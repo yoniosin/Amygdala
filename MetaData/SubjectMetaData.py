@@ -6,6 +6,9 @@ from sklearn.svm import SVR
 from Classifier.Classifier import BaseRegression
 from pathlib import Path
 import json
+from util.AmygDataSet import AmygDataSet, ScoresAmygDataset
+from torch.utils.data import random_split, DataLoader
+from util.config import LearnerMetaData
 
 
 class SubjectsMetaData:
@@ -32,11 +35,17 @@ class SubjectsMetaData:
         with open(md_path) as csv_file:
             csv_reader = csv.DictReader(csv_file, delimiter=',')
             for line in csv_reader:
-                subject_num = int(re.search(r'(\d{3})', line['SubCode']).group(1))
-                res_dict = self.test_dict if subject_num in self.test_list else self.train_dict
-                if line['TAS1'] == '' or line['STAI_S1'] == '':
+                regex = re.search(r'(sub-(\d{3})_ses-TP(\d).*mri(\D*)_bold)', line['filename'])
+                sub_name, sub_num, session_num, session_type = regex.groups()
+
+                res_dict = self.test_dict if int(sub_num) in self.test_list else self.train_dict
+                if session_type == 'practice' or session_num == 1:
                     continue
-                res_dict[subject_num] = create_subject()
+                try:
+                    caps, tas, stai = (int(line['CAPS-5']), int(line['TAS']), int(line['STAI']))
+                    res_dict[int(sub_num)] = {'CAPS': caps, 'TAS': tas, 'STAI': stai}
+                except ValueError:
+                    continue
             json.dump({**self.train_dict, **self.test_dict}, open('valid.json', 'w'))
 
     def create_labels(self, label_feature):
@@ -61,24 +70,41 @@ class SubjectsMetaData:
 
 
 def load_data_set():
-    ds_location = Path('../data')
-    return torch.load(ds_location / 'train_meta.pt'), torch.load(ds_location / 'test_meta.pt')
+    data_location = Path('../data/PTSD')
+    md = LearnerMetaData(batch_size=10,
+                         train_ratio=0.9,
+                         run_num=100,
+                         use_embeddings='init',
+                         )
+
+    ds = ScoresAmygDataset([data_location], md)
+    train_ds, test_ds = random_split(ds, (ds.train_len, ds.test_len))
+    train_list = [e['sub_num'] for e in train_ds]
+    test_list = [e['sub_num'] for e in test_ds]
+    json.dump({'train': train_list, 'test': test_list}, open('split.json', 'w'))
+
+    train_dl_ = DataLoader(train_ds, batch_size=10, shuffle=True)
+    torch.save(train_dl_, 'train_meta_dl.pt')
+    test_dl_ = DataLoader(test_ds, batch_size=10, shuffle=True)
+    torch.save(test_dl_, 'test_meta_dl.pt')
+
+    return train_dl_, test_dl_
 
 
 if __name__ == '__main__':
-    smd = SubjectsMetaData('fDemog - Sheet1.csv', '../data/split.json')
+    smd = SubjectsMetaData('Clinical.csv', '../split.json')
 
     train_dl, test_dl = load_data_set()
     net = torch.load('../sqeuence_last_run.pt')
     svr_loss = []
-    for i in [0, 1]:
-        (train_x, train_y), (test_x, test_y) = smd.create_labels(i)
-        model = SVR(gamma='auto')
-        model.fit(train_x, train_y)
-        y_hat = model.predict(test_x)
-        svr_loss.append(np.mean((test_y - y_hat) ** 2))
+    for feature in ['CAPS']:
+        # (train_x, train_y), (test_x, test_y) = smd.create_labels(i)
+        # model = SVR(gamma='auto')
+        # model.fit(train_x, train_y)
+        # y_hat = model.predict(test_x)
+        # svr_loss.append(np.mean((test_y - y_hat) ** 2))
 
-        emb_reg = BaseRegression(train_dl, test_dl, net.rnn.initilaizer, {**smd.train_dict, **smd.test_dict}, 3)
-        emb_reg.fit(500, i)
+        emb_reg = BaseRegression(train_dl, test_dl, net.rnn.initilaizer, {**smd.train_dict, **smd.test_dict}, 1)
+        emb_reg.fit(500, feature)
 
     print(f'svr_loss:{svr_loss}')

@@ -9,12 +9,18 @@ from torch.autograd import Variable
 class BaseRegression:
     def __init__(self, train_dl, test_dl, embedding_layer, meta_data, n_outputs):
         self._embed = embedding_layer
-        self.fc = nn.Sequential(nn.Linear(embedding_layer.out_features, n_outputs),
-                                nn.Softmax())
+        self.n_outputs = n_outputs
+        layers = [nn.Linear(embedding_layer.out_features, n_outputs)]
+        if n_outputs > 1:
+            layers.append(nn.Softmax())
+            self.loss_func = nn.CrossEntropyLoss()
+        else:
+            self.loss_func = nn.MSELoss()
+        self.fc = nn.Sequential(*layers)
         self.train_dl = train_dl
         self.test_dl = test_dl
         self.optimizer = optim.Adam(self.fc.parameters(), lr=1e-1, weight_decay=1e-2)
-        self.loss_func = nn.CrossEntropyLoss()
+
         self.meta_data = meta_data
 
     def get_score(self, name, predicted_feature):
@@ -39,17 +45,15 @@ class BaseRegression:
         dl = self.train_dl if train else self.test_dl
         res = []
         for batch in dl:
-            try:
-                res.append(self.run_batch(batch, train, predicted_feature))
-            except KeyError:
-                pass
+            res.append(self.run_batch(batch, train, predicted_feature))
 
         return res
 
     def run_batch(self, batch, train: bool, predicted_feature):
-        subject_num, x, y, subject_score, subject_one_hot = batch
-        input_ = Variable(self.get_embedding(subject_one_hot), requires_grad=train)
-        target = Variable(torch.tensor([self.get_score(int(s), predicted_feature) for s in subject_num], requires_grad=False))
+        # subject_num, x, subject_score, subject_one_hot = batch
+        input_ = Variable(self.get_embedding(batch['one_hot']), requires_grad=train)
+        t = [self.get_score(int(s), predicted_feature) for s in batch['sub_num']]
+        target = Variable(torch.tensor(t, requires_grad=False).float())
         output = self.fc(input_)
 
         loss = self.loss_func(output.squeeze(), target)
@@ -58,7 +62,7 @@ class BaseRegression:
             self.optimizer.step()
             self.optimizer.zero_grad()
         prediction = torch.argmax(output, dim=1)
-        accuracy = torch.sum(prediction == target).float() / len(prediction)
+        accuracy = 0 if self.n_outputs == 1 else torch.sum(prediction == target).float() / len(prediction)
         return float(loss), accuracy
 
     def test(self, predicted_feature):

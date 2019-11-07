@@ -16,7 +16,7 @@ class EmbeddingLSTM(nn.Module):
         self.use_embeddings = use_embeddings
         cell_type = EmbeddingLSTMCell if use_embeddings != 'concat' else ConcatEmbeddingLSTMCell
 
-        self.initilaizer = nn.Linear(105, self.hidden_size[0])
+        self.initilaizer = nn.Linear(500, self.hidden_size[0])
         self.cells = nn.ModuleList([cell_type(hidden_size=self.hidden_size[i],
                                               input_size=self.spacial_size if i == 0 else self.hidden_channels[i - 1],
                                               embedding_fc=self.initilaizer)
@@ -61,8 +61,7 @@ class EmbeddingLSTMCell(nn.Module):
     def zero_h(self, batch_size): return torch.zeros(batch_size, self.hidden_size).float()
     def get_embeddings(self, subject_id): return self.embedding_fc(subject_id)
 
-    def gen_gate(self):
-        return nn.Linear(self.input_size + self.hidden_size, self.hidden_size)
+    def gen_gate(self): return nn.Linear(self.input_size + self.hidden_size, self.hidden_size)
 
     @staticmethod
     def rearrange_inputs(x, h_prev, embed):
@@ -83,7 +82,7 @@ class EmbeddingLSTMCell(nn.Module):
 
 class ConcatEmbeddingLSTMCell(EmbeddingLSTMCell):
     def gen_gate(self):
-        return nn.Linear(self.input_size[1] + 2 * self.hidden_size, self.hidden_size)
+        return nn.Linear(self.input_size + 2 * self.hidden_size, self.hidden_size)
 
     @staticmethod
     def rearrange_inputs(x, h_prev, embed):

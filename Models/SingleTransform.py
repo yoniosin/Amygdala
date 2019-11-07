@@ -108,7 +108,6 @@ class ClassifyingBaseLine(nn.Module):
         return y
 
 
-
 class BaseModel:
     def __init__(self,  input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, name='sqeuence'):
         self.name = name
@@ -172,8 +171,8 @@ class ReconstructingModel(BaseModel):
         super().__init__(input_shape, hidden_size, md, train_dl, test_dl)
 
     def calc_signals(self, batch, train):
-        x = batch['passive']
-        y = batch['active']
+        x = batch['data'][:, :, 0]
+        y = batch['data'][:, :, 1]
         y = torch.cat([y[:, i] for i in range(self.n_windows)], dim=-1)  # concat active windows to long sequence
         input_ = Variable(x, requires_grad=train)
         target = Variable(y, requires_grad=False)

@@ -48,7 +48,7 @@ class AmygDataSet(Dataset):
 
     @staticmethod
     def create_one_hot(idx):
-        vec = torch.zeros(105)
+        vec = torch.zeros(500)
         vec[idx] = 1
         return vec
 
@@ -57,10 +57,9 @@ class AmygDataSet(Dataset):
         data = subject.get_data(train_windows, min_w, scalar_result=False)
 
         return {'data': data,
-                # 'active': data[:, 1],
                 'input_shape': data.shape,
                 'score': subject.get_score(train_windows),
-                # 'one_hot': self.create_one_hot(subject_num),
+                'one_hot': self.create_one_hot(subject_num - 534),
                 'type': subject.get_type()}
 
     def __len__(self):
@@ -83,8 +82,8 @@ class ScoresAmygDataset(AmygDataSet):
     """
     kwargs should include 'subject_path' and 'md'
     """
-    def __init__(self, subjects_path: Path, md: LearnerMetaData, load=False):
-        self.valid_sub = json.load(open('MetaData/valid.json', 'r'))
+    def __init__(self, subjects_path: Iterable[Path], md: LearnerMetaData, load=False):
+        self.valid_sub = json.load(open('../MetaData/valid.json', 'r'))
         super().__init__(subjects_path, md, load)
 
     def is_subject_valid(self, subject_num): return str(subject_num) in self.valid_sub.keys()

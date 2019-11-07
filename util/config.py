@@ -41,7 +41,7 @@ class ROIData:
 @dataclass
 class LearnerMetaData:
     run_num: int
-    use_embeddings: bool
+    use_embeddings: str
     batch_size: int = 2
     train_ratio: float = 0.8
     train_windows: int = 2
@@ -55,10 +55,10 @@ class LearnerMetaData:
     def __post_init__(self):
         assert 0 < self.train_ratio < 1
         assert 0 < self.train_windows < 5
-        meta_dict = json.load(open('meta.txt', 'r'))
-        self.total_subject = meta_dict['subjects_num']
-        self.min_w = meta_dict['min_w']
-        self.voxels_num = meta_dict['voxels_num']
+        # meta_dict = json.load(open('meta.txt', 'r'))
+        # self.total_subject = 60
+        self.min_w = 14
+        # self.voxels_num = meta_dict['voxels_num']
         self.in_channels = self.train_windows * 2 + 1
         self.run_name = f'{self.runs_dir}/run#{self.run_num}({self.use_embeddings})'
 

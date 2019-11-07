@@ -23,11 +23,11 @@ def load_data_set(subjects_dir_iter: Iterable[Path], load):
     json.dump({'train': train_list, 'test': test_list}, open('split.json', 'w'))
 
     train_dl_ = DataLoader(train_ds, batch_size=md.batch_size, shuffle=True,
-                           collate_fn=varied_sizes_collate
+                           # collate_fn=varied_sizes_collate
                            )
     torch.save(train_dl_, 'data/train_meta.pt')
     test_dl_ = DataLoader(test_ds, batch_size=md.batch_size, shuffle=True,
-                          collate_fn=varied_sizes_collate
+                          # collate_fn=varied_sizes_collate
                           )
     torch.save(test_dl_, 'data/test_meta.pt')
     # torch.save(ds.get_sample_shape(), 'data/input_shape.pt')
@@ -62,15 +62,17 @@ if __name__ == '__main__':
     run_num = json.load(open('runs/last_run.json', 'r'))['last'] + 1
     print(args.embed)
     md = LearnerMetaData(batch_size=10,
-                         train_ratio=0.9,
+                         train_ratio=0.8,
                          run_num=run_num,
                          use_embeddings=args.embed,
                          )
     load_model = False
     healthy_dir = Path('../Amygdala/data/3D')
     ptsd_dir = Path('data/PTSD')
-    train_dl, test_dl, input_shape = load_data_set((healthy_dir, ptsd_dir), load=load_model)
-    model = ClassifyingModel(input_shape, 10, md, train_dl, test_dl)
+    dir_iter = [ptsd_dir]
+    # iter_dir.append(healthy_dir)
+    train_dl, test_dl, input_shape = load_data_set(dir_iter, load=load_model)
+    model = ReconstructingModel(input_shape, 10, md, train_dl, test_dl)
     train_nn = True
     if train_nn:
         model.train(50)
