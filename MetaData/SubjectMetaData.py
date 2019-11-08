@@ -53,11 +53,10 @@ class SubjectsMetaData:
             """Separate certain feature from the data, and set it as the label"""
             target_dict = self.train_dict if train else self.test_dict
             x, y = [], []
-            for key in target_dict.keys():
-                x_before = list(target_dict[key][:label_feature])
-                x_after = list(target_dict[key][label_feature + 1:])
-                x.append(x_before + x_after)
-                y.append(target_dict[key][i])
+            keys = ['TAS', 'STAI']
+            for subject in target_dict.keys():
+                x.append([target_dict[subject][key] for key in keys])
+                y.append(target_dict[subject][label_feature])
 
             res = np.array(x), np.array(y)
             if train:
@@ -72,7 +71,7 @@ class SubjectsMetaData:
 def load_data_set():
     data_location = Path('../data/PTSD')
     md = LearnerMetaData(batch_size=10,
-                         train_ratio=0.9,
+                         train_ratio=0.7,
                          run_num=100,
                          use_embeddings='init',
                          )
@@ -98,11 +97,12 @@ if __name__ == '__main__':
     net = torch.load('../sqeuence_last_run.pt')
     svr_loss = []
     for feature in ['CAPS']:
-        # (train_x, train_y), (test_x, test_y) = smd.create_labels(i)
+        # (train_x, train_y), (test_x, test_y) = smd.create_labels(feature)
         # model = SVR(gamma='auto')
         # model.fit(train_x, train_y)
         # y_hat = model.predict(test_x)
         # svr_loss.append(np.mean((test_y - y_hat) ** 2))
+        # print(svr_loss)
 
         emb_reg = BaseRegression(train_dl, test_dl, net.rnn.initilaizer, {**smd.train_dict, **smd.test_dict}, 1)
         emb_reg.fit(500, feature)

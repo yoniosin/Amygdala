@@ -19,7 +19,7 @@ class BaseRegression:
         self.fc = nn.Sequential(*layers)
         self.train_dl = train_dl
         self.test_dl = test_dl
-        self.optimizer = optim.Adam(self.fc.parameters(), lr=1e-1, weight_decay=1e-2)
+        self.optimizer = optim.Adam(self.fc.parameters(), lr=1e-1, weight_decay=0)
 
         self.meta_data = meta_data
 
@@ -31,15 +31,15 @@ class BaseRegression:
 
     def fit(self, n_epochs, predicted_feature):
         bar = progressbar.ProgressBar()
-        writer = SummaryWriter(f'runs/{predicted_feature}')
+        writer = SummaryWriter(f'runs/{predicted_feature}6')
         for i in bar(range(n_epochs)):
             train_loss = self.run_model(train=True, predicted_feature=predicted_feature)
             writer.add_scalar('train', np.mean([x[0] for x in train_loss]), i)
-            writer.add_scalar('train_acc', np.mean([x[1] for x in train_loss]), i)
+            # writer.add_scalar('train_acc', np.mean([x[1] for x in train_loss]), i)
 
             test_loss = self.test(predicted_feature)
             writer.add_scalar('test', np.mean([x[0] for x in test_loss]), i)
-            writer.add_scalar('test_acc', np.mean([x[1] for x in test_loss]), i)
+            # writer.add_scalar('test_acc', np.mean([x[1] for x in test_loss]), i)
 
     def run_model(self, train: bool, predicted_feature):
         dl = self.train_dl if train else self.test_dl

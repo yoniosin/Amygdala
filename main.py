@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 import torch
 from torch.utils.data import random_split, DataLoader
-from Models.SingleTransform import ReconstructingModel, ClassifyingModel
+from Models import SingleTransform as t
 import json
 from typing import Iterable
 from collections import defaultdict
@@ -66,13 +66,15 @@ if __name__ == '__main__':
                          run_num=run_num,
                          use_embeddings=args.embed,
                          )
-    load_model = False
+    load_model = True
     healthy_dir = Path('../Amygdala/data/3D')
     ptsd_dir = Path('data/PTSD')
     dir_iter = [ptsd_dir]
     # iter_dir.append(healthy_dir)
     train_dl, test_dl, input_shape = load_data_set(dir_iter, load=load_model)
-    model = ReconstructingModel(input_shape, 10, md, train_dl, test_dl)
+    model = t.ClassifyingModel(input_shape, 16, md, train_dl, test_dl, baseline=False)
+    # model = t.ReconstructingModel(input_shape, 16, md, train_dl, test_dl)
+    # model = t.STModel(input_shape, 10, md, train_dl, test_dl, name="single_ptsd")
     train_nn = True
     if train_nn:
         model.train(50)
