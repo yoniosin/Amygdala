@@ -6,11 +6,11 @@ import numpy as np
 
 
 class Window:
-    def __init__(self, idx, time_slots, window_type, bold_mat, voxels_md):
+    def __init__(self, idx, time_slots, window_type, bold_mat):
         self.idx = idx
         self.time = time_slots
         self.window_type = window_type
-        self.bold = self.gen_bold_mat(bold_mat, voxels_md)
+        self.bold = self.gen_bold_mat(bold_mat)
 
     @abstractmethod
     def gen_bold_mat(self, *args): pass
@@ -44,7 +44,8 @@ class FlatWindow(Window):
 
 
 class Window3D(Window):
-    def gen_bold_mat(self, bold_mat, voxels_md):
+    def gen_bold_mat(self, bold_mat):
+        voxels_md = Subject.voxels_md
         x = bold_mat[voxels_md.h_range, :, :, :]
         x = x[:, voxels_md.w_range, :, :]
         x = x[:, :, voxels_md.d_range, :]
@@ -82,13 +83,16 @@ class PairedWindows:
 
 
 class Subject:
-    def __init__(self, meta_data: SubjectMetaData, bold_mat, window_data_type=Window3D):
+    voxels_md = None
+
+    def __init__(self, meta_data: SubjectMetaData, bold_mat, subject_type, window_data_type=Window3D):
         def gen_windows(wind_type):
             times_list = self.meta_data.watch_times if wind_type == 'watch' else self.meta_data.regulate_times
-            return map(lambda w: window_data_type(*w, wind_type, bold_mat, self.get_voxels_md()), enumerate(times_list))
+            return map(lambda w: window_data_type(*w, wind_type, bold_mat), enumerate(times_list))
 
         self.meta_data = meta_data
         self.name = meta_data.subject_name
+        self.type_ = subject_type
         self.paired_windows = list(map(PairedWindows, gen_windows('watch'), gen_windows('regulate')))
 
     def get_data(self, train_num, width, scalar_result=True):
@@ -104,16 +108,13 @@ class Subject:
             res = torch.stack([w.get_data(width) for w in self.get_windows(train_num + 1)]).float()
             return res
 
-    # @property
-    # def subject_num(self): return int(re.search(r'(\d{3})$', name).group(1))
-
     def get_single_experience(self, idx, width):
         return self.paired_windows[idx].get_data(width)
 
     def __repr__(self):
         grades = [pw.score for pw in self.paired_windows]
         grades_formatted = ("{:.2f}, " * len(grades)).format(*grades)
-        return f'{self.name}, windows grades=[{grades_formatted}]'
+        return f'{self.type} subject #{self.name}, windows grades=[{grades_formatted}]'
 
     def get_windows(self, windows_num): return self.paired_windows[:windows_num]
 
@@ -128,41 +129,11 @@ class Subject:
         for pw in self.paired_windows:
             pw.calc_score()
 
-    @abstractmethod
-    def get_voxels_md(self): pass
-
-    def get_type(self): return 'healthy'
-
-
-class HealthySubject(Subject):
-    voxels_md = None
-
-    def __init__(self, meta_data: SubjectMetaData, bold_mat):
-        self.subject_type = 'healthy'
-        super().__init__(meta_data, bold_mat)
-
-    def get_voxels_md(self): return HealthySubject.voxels_md
-
-    def get_type(self): return 'healthy'
-
-    def __repr__(self): return f'{self.subject_type} subject #' + super().__repr__()
+    @property
+    def type(self): return 'healthy'
 
 
 class PTSDSubject(Subject):
-    voxels_md = None
+    @property
+    def type(self): return 'PTSD'
 
-    def __init__(self, meta_data: SubjectMetaData, bold_mat):
-        self.subject_type = 'PTSD'
-        super().__init__(meta_data, bold_mat)
-
-    def get_voxels_md(self): return PTSDSubject.voxels_md
-
-    def __repr__(self): return f'{self.subject_type} subject #' + super().__repr__()
-
-    def get_type(self): return 'PTSD'
-
-
-def subject_generator(subject_id, protocol, bold_mat, data_type='3d'):
-    md = SubjectMetaData(subject_id, *protocol)
-    window_data_type = Window3D if data_type == '3d' else Window
-    return Subject(meta_data=md, bold_mat=bold_mat, window_data_type=window_data_type)

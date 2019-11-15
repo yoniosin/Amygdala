@@ -69,6 +69,9 @@ class SubjectsMetaData:
 
 
 def load_data_set():
+    if load and Path('test_meta_dl.pt').exists() and Path('train_meta_dl.pt').exists():
+        return torch.load('train_meta_dl.pt'), torch.load('test_meta_dl.pt')
+
     data_location = Path('../data/PTSD')
     md = LearnerMetaData(batch_size=10,
                          train_ratio=0.7,
@@ -93,8 +96,9 @@ def load_data_set():
 if __name__ == '__main__':
     smd = SubjectsMetaData('Clinical.csv', '../split.json')
 
+    load = True
     train_dl, test_dl = load_data_set()
-    net = torch.load('../sqeuence_last_run.pt')
+    net = torch.load('../sequence_last_run.pt')
     svr_loss = []
     for feature in ['CAPS']:
         # (train_x, train_y), (test_x, test_y) = smd.create_labels(feature)

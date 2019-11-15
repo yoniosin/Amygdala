@@ -65,7 +65,7 @@ class ClassifyingNetwork(nn.Module):
         super().__init__()
         self.n_windows = n_windows
         self.seq_len = seq_len
-        # 2 in_channels <==> (Passive, Active)
+        # 2 in_channels are (Watch, Regulate)
         self.conv = nn.Conv3d(2, n_filters, conv_kernel_size)
         self.mlp = nn.Sequential(nn.Linear(n_filters, embedding_size),
                                  nn.Sigmoid(),
@@ -80,7 +80,8 @@ class ClassifyingNetwork(nn.Module):
         """
         def global_average_pooling(data):
             """[batch, filters, height, width, depth] --> [batch, filters] """
-            return data.mean(dim=(2, 3, 4))
+            spacial_dim = list(range(len(data.shape)))[-3:]  # last 3 dimensions are to be reduced
+            return data.mean(dim=spacial_dim)
         conv_out = torch.stack([global_average_pooling(self.conv(x[..., t])) for t in range(self.seq_len)], dim=1)
         mlp_out = self.mlp(conv_out).view(x.shape[0], -1)
         return nn.Softmax(dim=1)(self.final_fc(mlp_out))
@@ -176,7 +177,7 @@ class BaseModel:
     def extract_active(self, data): return self.extract_part_from_data(data, 1)
 
 
-class ReconstructingModel(BaseModel):
+class ReconstructiveModel(BaseModel):
     def calc_signals(self, batch, train):
         x = self.extract_passive(batch['data'])
         x = Variable(x, requires_grad=train)
@@ -196,8 +197,10 @@ class ReconstructingModel(BaseModel):
     def build_NN(self, input_shape, hidden_size, use_embeddings):
         return SequenceTransformNet(input_shape, hidden_size,input_shape, use_embeddings)
 
+    def extract_passive(self, data):return data[:, :, 0]
 
-class STModel(ReconstructingModel):
+
+class STModel(ReconstructiveModel):
     def build_NN(self, input_shape, hidden_size, use_embeddings): return STNet(input_shape=input_shape)
 
     def extract_part_from_data(self, data, part): return data[:, :, part]

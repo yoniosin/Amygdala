@@ -22,18 +22,19 @@ class AmygDataSet(Dataset):
 
     def build_ds(self, subjects_dir_iter: Iterable[Path], md: LearnerMetaData):
         """:returns dictionary with subjects data, which is constructed using get_subject_data()"""
-        res_dict = {}
+        def generate_subject():
+            sub = pickle.load(open(str(subject_path), 'rb'))
+            sub_num = int(re.search(r'(\d{3})$', sub.name).group(1))
+            if self.is_subject_valid(sub_num):
+                res_list.append({'sub_num': sub_num,
+                                 **self.get_subject_data(sub, sub_num, md.train_windows, md.min_w)})
 
-        i = 0
+        res_list = []
         for subjects_dir in subjects_dir_iter:
             for subject_path in subjects_dir.iterdir():
-                sub = pickle.load(open(str(subject_path), 'rb'))
-                sub_num = int(re.search(r'(\d{3})$', sub.name).group(1))
-                if self.is_subject_valid(sub_num):
-                    res_dict[i] = {'sub_num': sub_num, **self.get_subject_data(sub, sub_num, md.train_windows, md.min_w)}
-                    i += 1
+                generate_subject()
 
-        return res_dict
+        return res_list
 
     def is_subject_valid(self, subject_num):
         return True
@@ -48,7 +49,7 @@ class AmygDataSet(Dataset):
 
     @staticmethod
     def create_one_hot(idx):
-        vec = torch.zeros(500)
+        vec = torch.zeros(1000)
         vec[idx] = 1
         return vec
 
@@ -60,7 +61,7 @@ class AmygDataSet(Dataset):
                 'input_shape': data.shape,
                 'score': subject.get_score(train_windows),
                 'one_hot': self.create_one_hot(subject_num - 534),
-                'type': subject.get_type()}
+                'type': subject.type}
 
     def __len__(self):
         return len(self.subjects_dict)

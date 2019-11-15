@@ -16,7 +16,7 @@ class EmbeddingLSTM(nn.Module):
         self.use_embeddings = use_embeddings
         cell_type = EmbeddingLSTMCell if use_embeddings != 'concat' else ConcatEmbeddingLSTMCell
 
-        self.initilaizer = nn.Linear(500, self.hidden_size[0])
+        self.initilaizer = nn.Linear(1000, self.hidden_size[0])
         self.cells = nn.ModuleList([cell_type(hidden_size=self.hidden_size[i],
                                               input_size=self.spacial_size if i == 0 else self.hidden_channels[i - 1],
                                               embedding_fc=self.initilaizer)
@@ -38,7 +38,10 @@ class EmbeddingLSTM(nn.Module):
                 x_i = x[..., t]
                 y_prev = y[..., t - 1] if t >= 1 else torch.zeros(x_i.shape)
                 # concatenate Xt, Yt-1
-                x_i = torch.stack((x_i, y_prev), dim=-1)
+                try:
+                    x_i = torch.stack((x_i, y_prev), dim=-1)
+                except RuntimeError:
+                    print()
                 h, c = cell(x_i, h, c, embed, self.use_embeddings)
                 inner_cell_out.append(h)
 

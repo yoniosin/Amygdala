@@ -31,7 +31,7 @@ class BaseRegression:
 
     def fit(self, n_epochs, predicted_feature):
         bar = progressbar.ProgressBar()
-        writer = SummaryWriter(f'runs/{predicted_feature}6')
+        writer = SummaryWriter(f'runs/{predicted_feature}7')
         for i in bar(range(n_epochs)):
             train_loss = self.run_model(train=True, predicted_feature=predicted_feature)
             writer.add_scalar('train', np.mean([x[0] for x in train_loss]), i)

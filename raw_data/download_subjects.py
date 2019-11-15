@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 from util.config import load_mat
-from util.Subject import HealthySubject, PTSDSubject, SubjectMetaData
+from util.Subject import Subject, SubjectMetaData
 import numpy as np
 from util.config import ROIData
 import nibabel as nib
@@ -10,23 +10,26 @@ import mat4py
 from argparse import ArgumentParser
 
 
-def calc_roi():
+def calc_roi(dir_path):
     """Load Amygdala ROI matrix, and calculate real voxels and cubic range in each dimension"""
-    img = nib.load('PTSD/rrAmygd_ptsd.nii')
+    img = nib.load(f'{dir_path}/rrAmygd_ptsd.nii')
     roi = np.where(np.array(img.dataobj))
     amyg_vox = [vox for vox in zip(*roi)]
     min_sizes = map(min, roi)
     max_sizes = map(max, roi)
     h, w, d = list(map(lambda small, big: list(range(small, big + 1)), min_sizes, max_sizes))
 
-    roi_dict = ROIData(amyg_vox, h, w, d)
-    return roi_dict
+    return ROIData(amyg_vox, h, w, d)
 
 
 def create_subject(subject_path: Path, subject_type):
-    regex = re.search(r'(sub-(\d{3})_ses-TP(\d).*mri(\D*)_bold)\.mat', str(subject_path))
+    ptsd_template = r'(sub-(\d{3})_ses-TP(\d).*mri(\D*)_bold)\.mat'
+    fibro_template = r'(sub-(\d{3,})-ses-(\d)-\D*(\d{2}))'
+    template = ptsd_template if args.type == 'PTSD' else fibro_template
+    regex = re.search(template, str(subject_path))
     sub_name, sub_num, session_num, session_type = regex.groups()
-    if Path(f'../data/PTSD/PTSD_subject_{sub_num}.pkl').exists() or session_num != '2' or session_type == 'practice':
+    destination_path = Path(f'../data/{args.type}/{args.type}_subject_{sub_num}.pkl')
+    if destination_path.exists() or session_num != '2' or session_type == '01':
         return
 
     subject_idx = protocol['filename'].index(sub_name)
@@ -39,9 +42,8 @@ def create_subject(subject_path: Path, subject_type):
                          )
     try:
         bold_mat = np.array(load_mat(str(subject_path)), dtype=float)
-        sub = subject_type(md, bold_mat)
-        sub.meta_data = sub.meta_data
-        pickle.dump(sub, open(f'../data/PTSD/PTSD_subject_{sub_num}.pkl', 'wb'))
+        sub = Subject(md, bold_mat, subject_type=subject_type)
+        pickle.dump(sub, open(str(destination_path), 'wb'))
         print(f'Successfully created subject #{sub_num}')
     except:
         print(f'Failed creating subject #{sub_num}')
@@ -49,13 +51,19 @@ def create_subject(subject_path: Path, subject_type):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('type', type=str, choices=['healthy', 'PTSD'])
+    parser.add_argument('type', type=str, choices=['healthy', 'PTSD', 'Fibro'])
 
     args = parser.parse_args()
-    sub_type = HealthySubject if args.type == 'healthy' else PTSDSubject
-    protocol = mat4py.loadmat('PTSD/Protocol.mat')['U']
-    roi_dict_path = 'roi_dict.json'
-    sub_type.voxels_md = calc_roi()
-    raw_data_path = Path('PTSD/DataMat')
+    protocol = mat4py.loadmat(f'{args.type}/Protocol.mat')['U']
+    roi_path = Path(f'{args.type}/roi_dict.pkl')
+    if roi_path.exists():
+        roi_dict = pickle.load(open(str(roi_path), 'rb'))
+    else:
+        roi_dict = calc_roi(args.type)
+        pickle.dump(roi_dict, open(f'{args.type}/roi_dict.pkl', 'wb'))
+
+    Subject.voxels_md = roi_dict
+
+    raw_data_path = Path(f'{args.type}/DataMat')
     for sub_path in raw_data_path.iterdir():
-        create_subject(sub_path, sub_type)
+        create_subject(sub_path, args.type)
