@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset, ConcatDataset
+from torch.utils.data import Dataset, random_split
 from util.config import LearnerMetaData
 from pathlib import Path
 import pickle
@@ -23,12 +23,27 @@ class AmygDataSet(Dataset):
     def build_ds(self, subjects_dir_iter: Iterable[Path], md: LearnerMetaData):
         """:returns dictionary with subjects data, which is constructed using get_subject_data()"""
         def generate_subject():
-            sub = pickle.load(open(str(subject_path), 'rb'))
-            sub_num = int(re.search(r'(\d{3})$', sub.name).group(1))
-            if self.is_subject_valid(sub_num):
-                res_list.append({'sub_num': sub_num,
-                                 **self.get_subject_data(sub, sub_num, md.train_windows, md.min_w)})
+            def create_one_hot(idx):
+                vec = torch.zeros(one_hot_len)
+                vec[idx] = 1
+                return vec
 
+            sub = pickle.load(open(str(subject_path), 'rb'))
+            sub_num = str(int(re.search(r'(\d{,4})$', sub.name).group(1)))  # remove leading 0s
+            if self.is_subject_valid(sub_num):
+                data = sub.get_data(md.train_windows, md.min_w, scalar_result=False)
+                res_list.append({'sub_num': sub_num,
+                                 'one_hot': create_one_hot(mapping[sub_num]),
+                                 'data': data,
+                                 'input_shape': data.shape,
+                                 'score': sub.get_score(md.train_windows),
+                                 'type': sub.type})
+
+        try:
+            mapping = json.load(open('mapping.json', 'r'))
+        except FileNotFoundError:
+            mapping = json.load(open('../mapping.json', 'r'))
+        one_hot_len = len(mapping)
         res_list = []
         for subjects_dir in subjects_dir_iter:
             for subject_path in subjects_dir.iterdir():
@@ -47,22 +62,6 @@ class AmygDataSet(Dataset):
         else:
             raise IOError('Missing Train File')
 
-    @staticmethod
-    def create_one_hot(idx):
-        vec = torch.zeros(1000)
-        vec[idx] = 1
-        return vec
-
-    def get_subject_data(self, subject, subject_num, train_windows, min_w):
-        """:returns passive, active, score, one_hot encoding"""
-        data = subject.get_data(train_windows, min_w, scalar_result=False)
-
-        return {'data': data,
-                'input_shape': data.shape,
-                'score': subject.get_score(train_windows),
-                'one_hot': self.create_one_hot(subject_num - 534),
-                'type': subject.type}
-
     def __len__(self):
         return len(self.subjects_dict)
 
@@ -77,6 +76,14 @@ class AmygDataSet(Dataset):
 
     def save(self):
         torch.save(self.subjects_dict, open('_'.join(('3d', 'dataset.pt')), 'wb'))
+
+    def train_test_split(self):
+        train_ds, test_ds = random_split(self, (self.train_len, self.test_len))
+        train_list = [e['sub_num'] for e in train_ds]
+        test_list = [e['sub_num'] for e in test_ds]
+        json.dump({'train': train_list, 'test': test_list}, open('split.json', 'w'))
+
+        return train_ds, test_ds
 
 
 class ScoresAmygDataset(AmygDataSet):

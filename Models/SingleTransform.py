@@ -38,7 +38,7 @@ class SequenceTransformNet(nn.Module):
           + P ---> A
      A A]
     """
-    def __init__(self, input_shape, hidden_size, output_size, use_embeddings):
+    def __init__(self, input_shape, hidden_size, output_size, use_embeddings, n_subjects):
         super().__init__()
         self.single_transform = torch.load(open('single_run.pt', 'rb'))  # load preciously trained ST
         phases, _, height, width, depth, phase_len = input_shape
@@ -48,7 +48,7 @@ class SequenceTransformNet(nn.Module):
 
         # create Seq2Seq NN
         # 2 factor is because we concat recent history [Xt|Yt-1]
-        self.rnn = EmbeddingLSTM(2 * spacial_size, [hidden_size], use_embeddings)
+        self.rnn = EmbeddingLSTM(2 * spacial_size, [hidden_size], n_subjects, use_embeddings)
         self.fc1 = nn.Linear(seq_len * hidden_size, seq_len * spacial_size)
         self.fc2 = nn.Linear(seq_len, output_size[-1])
 
@@ -113,19 +113,19 @@ class ClassifyingBaseLine(nn.Module):
 
 
 class BaseModel:
-    def __init__(self, input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, name, loss_func=None):
+    def __init__(self, n_subjects, input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, name, loss_func=None):
         self.name = name
         self.batch_size = md.batch_size
         self.n_windows = md.train_windows + 1
         self.train_dl = train_dl
         self.test_dl = test_dl
         self.run_name = md.run_name
-        self.net = self.build_NN(input_shape, hidden_size, md.use_embeddings)
+        self.net = self.build_NN(input_shape, hidden_size, md.use_embeddings, n_subjects)
         self.optimizer = optim.Adam(self.net.parameters(), lr=5e-4, weight_decay=0)
         self.loss_func = loss_func
 
     @abstractmethod
-    def build_NN(self, input_shape, hidden_size, use_embeddings): pass
+    def build_NN(self, input_shape, hidden_size, use_embeddings, n_subjects): pass
 
     def update_logger(self, writer, train_stats, test_stats, epoch):
         writer.add_scalar('train_loss', np.mean(train_stats), epoch)
@@ -178,6 +178,9 @@ class BaseModel:
 
 
 class ReconstructiveModel(BaseModel):
+    def __init__(self, n_subjects, input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, name='sequence'):
+        super().__init__(n_subjects, input_shape, hidden_size, md, train_dl, test_dl, name, loss_func=nn.MSELoss())
+
     def calc_signals(self, batch, train):
         x = self.extract_passive(batch['data'])
         x = Variable(x, requires_grad=train)
@@ -187,21 +190,18 @@ class ReconstructiveModel(BaseModel):
 
         return output, target
 
-    def __init__(self, input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, name='sequence'):
-        super().__init__(input_shape, hidden_size, md, train_dl, test_dl, name, loss_func=nn.MSELoss())
-
     def calc_out(self, input_, **kwargs):
         output, c = self.net(input_, kwargs['one_hot'], kwargs['y'])
         return output
 
-    def build_NN(self, input_shape, hidden_size, use_embeddings):
-        return SequenceTransformNet(input_shape, hidden_size,input_shape, use_embeddings)
+    def build_NN(self, input_shape, hidden_size, use_embeddings, n_subjects):
+        return SequenceTransformNet(input_shape, hidden_size, input_shape, use_embeddings, n_subjects)
 
     def extract_passive(self, data):return data[:, :, 0]
 
 
 class STModel(ReconstructiveModel):
-    def build_NN(self, input_shape, hidden_size, use_embeddings): return STNet(input_shape=input_shape)
+    def build_NN(self, input_shape, hidden_size, use_embeddings, n_subjects): return STNet(input_shape=input_shape)
 
     def extract_part_from_data(self, data, part): return data[:, :, part]
 
@@ -213,7 +213,7 @@ class ClassifyingModel(BaseModel):
         self.baseline = baseline
         super().__init__(input_shape, hidden_size, md, train_dl, test_dl, name='classifier', loss_func=nn.BCELoss())
 
-    def build_NN(self, input_shape, hidden_size, use_embeddings):
+    def build_NN(self, input_shape, *kwargs):
         return ClassifyingBaseLine(2, 2, 42, 3) if self.baseline else ClassifyingNetwork(2, 10, 3, 6, 3, 42)
 
     def calc_signals(self, batch, train):

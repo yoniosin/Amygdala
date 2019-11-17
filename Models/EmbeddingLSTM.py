@@ -9,14 +9,14 @@ class EmbeddingLSTM(nn.Module):
         2) init- cell state are initiated with the embeddings
         3) concat- embeddings are concatenated to the input
      """
-    def __init__(self, spacial_size, hidden_size, use_embeddings='none', num_layers=1):
+    def __init__(self, spacial_size, hidden_size, n_subjects, use_embeddings='none', num_layers=1):
         super().__init__()
         self.spacial_size = spacial_size
         self.hidden_size = hidden_size
         self.use_embeddings = use_embeddings
         cell_type = EmbeddingLSTMCell if use_embeddings != 'concat' else ConcatEmbeddingLSTMCell
 
-        self.initilaizer = nn.Linear(1000, self.hidden_size[0])
+        self.initilaizer = nn.Linear(n_subjects, self.hidden_size[0])
         self.cells = nn.ModuleList([cell_type(hidden_size=self.hidden_size[i],
                                               input_size=self.spacial_size if i == 0 else self.hidden_channels[i - 1],
                                               embedding_fc=self.initilaizer)
