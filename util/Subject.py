@@ -5,17 +5,6 @@ import torch
 import numpy as np
 
 
-def calc_linear_stats(batch, dims):
-    def calc_stats(s):
-        mean = torch.mean(s, dim=dims)
-        var = torch.var(s, dim=dims)
-
-        return mean, var
-    mean_list, var_list = zip(*[calc_stats(subject) for subject in batch])
-    all_results = torch.cat((torch.stack(mean_list), torch.stack(var_list)), dim=1)
-    return all_results
-
-
 class Window:
     def __init__(self, idx, time_slots, window_type, bold_mat):
         self.idx = idx

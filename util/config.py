@@ -49,7 +49,7 @@ class LearnerMetaData:
     min_w: int = field(init=False)
     voxels_num: int = field(init=False)
     in_channels: int = field(init=False)
-    run_name: str = field(init=False)
+    logger_path: str = field(init=False)
     runs_dir: str = 'runs'
 
     def __post_init__(self):
@@ -60,7 +60,7 @@ class LearnerMetaData:
         self.min_w = 14
         # self.voxels_num = meta_dict['voxels_num']
         self.in_channels = self.train_windows * 2 + 1
-        self.run_name = f'{self.runs_dir}/run#{self.run_num}({self.use_embeddings})'
+        self.logger_path = f'{self.runs_dir}/run#{self.run_num}({self.use_embeddings})'
 
     def to_json(self): return asdict(self)
 

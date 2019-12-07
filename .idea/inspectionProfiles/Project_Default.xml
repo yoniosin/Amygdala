@@ -27,6 +27,10 @@
           <option value="Classifier.Classifier.EmbeddingClassifier.full_dict" />
           <option value="Classifier.Classifier.EmbeddingPredictor.train_dict" />
           <option value="Classifier.Classifier.EmbeddingPredictor.test_dict" />
+          <option value="Models.Predictors.EmbeddingPredictor.full_dict" />
+          <option value="Models.Predictors.EmbeddingPredictor.train_dict" />
+          <option value="Models.Predictors.EmbeddingPredictor.test_dict" />
+          <option value="Models.Predictors.EmbeddingClassifier.full_dict" />
         </list>
       </option>
     </inspection_tool>

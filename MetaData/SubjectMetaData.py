@@ -1,8 +1,7 @@
 import csv
 import torch
 import re
-import numpy as np
-from Classifier.Classifier import EmbeddingPredictor
+from Models.Predictors import EmbeddingPredictor
 from pathlib import Path
 import json
 from util.AmygDataSet import AmygDataSet, ScoresAmygDataset
