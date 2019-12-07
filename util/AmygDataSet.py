@@ -90,12 +90,10 @@ class ScoresAmygDataset(AmygDataSet):
     """
     kwargs should include 'subject_path' and 'md'
     """
-    def __init__(self, subjects_path: Iterable[Path], md: LearnerMetaData, load=False):
-        self.valid_sub = json.load(open('../MetaData/valid.json', 'r'))
-        super().__init__(subjects_path, md, load)
+    def __init__(self, subjects_data_path: Iterable[Path], md: LearnerMetaData, load=False):
+        self.invalid = json.load(open('invalid_subjects.json', 'r'))
+        super().__init__(subjects_data_path, md, load)
 
-    def is_subject_valid(self, subject_num): return str(subject_num) in self.valid_sub.keys()
+    def is_subject_valid(self, subject_num):
+        return int(subject_num) not in self.invalid
 
-
-if __name__ == '__main__':
-    pass

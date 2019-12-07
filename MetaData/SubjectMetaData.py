@@ -2,7 +2,7 @@ import csv
 import torch
 import re
 import numpy as np
-from Classifier.Classifier import BaseRegression
+from Classifier.Classifier import EmbeddingPredictor
 from pathlib import Path
 import json
 from util.AmygDataSet import AmygDataSet, ScoresAmygDataset
@@ -21,6 +21,7 @@ class SubjectsMetaData:
         self.train_dict, self.test_dict = {}, {}
         self.train_data, self.test_data = None, None
         split = json.load(open(split_path, 'r'))
+        self.invalid = json.load(open('invalid_subjects.json', 'r'))
         self.train_list = split['train']
         self.test_list = split['test']
 
@@ -28,14 +29,16 @@ class SubjectsMetaData:
             csv_reader = csv.DictReader(csv_file, delimiter=',')
             for line in csv_reader:
                 sub_num = self.extract_subject_num(line)
-                try:
-                    res_dict = self.get_correct_dict(sub_num)
-                    res_dict[sub_num] = self.extract_meta_data(line)
-                except ValueError:
-                    # print(f'Failed to Create Subject #{sub_num}')
-                    continue
+                if int(sub_num) not in self.invalid:
+                    try:
+                        res_dict = self.get_correct_dict(sub_num)
+                        res_dict[sub_num] = self.extract_meta_data(line)
+                    except ValueError as e:
+                        print(e)
 
-        json.dump({**self.train_dict, **self.test_dict}, open('valid.json', 'w'))
+        valid_subjects = json.load(open('valid.json', 'r'))
+        valid_subjects = {**valid_subjects, **self.train_dict, **self.test_dict}
+        json.dump(valid_subjects, open('valid.json', 'w'))
         print(f'Created {self.name} DataSet with {len(self.full_dict)} records')
 
     @property
@@ -47,7 +50,7 @@ class SubjectsMetaData:
         elif sub_num in self.train_list:
             return self.train_dict
         else:
-            raise ValueError("Subject not in lists")
+            raise ValueError(f"Subject#{sub_num} not in lists!!")
 
     @abstractmethod
     def extract_subject_num(self, line): pass
@@ -66,6 +69,9 @@ class SubjectsMetaData:
 
 
 class HealthySubjectMetaData(SubjectsMetaData):
+    def extract_subject_num(self, line):
+        return str(int(re.search(r'(\d+)', line['SubCode']).group()))
+
     @staticmethod
     def extract_meta_data(line):
         """Receives meta-data line of a subject, and returns needed values"""
@@ -74,18 +80,17 @@ class HealthySubjectMetaData(SubjectsMetaData):
         sex = 0 if line['Sex'] == 'M' else 1
         age = int(re.search(r'(\d{3})', line['Age']).group(1))
 
-        return coded_past, sex, age, float(line['TAS1']), float(line['STAI_S1'])
+        return {'past': coded_past, 'sex': sex, 'age': age, 'TAS': float(line['TAS']), 'STAI': float(line['STAI'])}
 
 
 class PTSDSubjectMetaData(SubjectsMetaData):
     @property
     def name(self): return 'PTSD'
 
-    @staticmethod
-    def extract_meta_data(line):
+    def extract_meta_data(self, line):
         if any(map(lambda t: t == '#N/A', line.values())) or line['task'] == 'Practice' or line['session'][-1] == 1:
             raise ValueError("practice run or not final session")
-        return line
+        return {**line, 'type': self.name}
 
     def extract_subject_num(self, line):
         return str(int(line['subject']))
@@ -100,7 +105,7 @@ class FibroSubjectMetaData(SubjectsMetaData):
     def extract_meta_data(self, line):
         if any(map(lambda i: i == '', line.values())):
             raise ValueError("empty value")
-        return line
+        return {**line, 'type': self.name}
 
 
 def load_data_set(data_location: List[Path]):
@@ -124,19 +129,19 @@ def load_data_set(data_location: List[Path]):
 
 
 if __name__ == '__main__':
-    fibro_md = FibroSubjectMetaData('Fibro/Clinical.csv', '../split.json')
+    # fibro_md = FibroSubjectMetaData('Fibro/Clinical.csv', '../split.json')
     ptsd_md = PTSDSubjectMetaData('PTSD/Clinical.csv', '../split.json')
 
-    load = False
+    load = True
     train_dl, test_dl = load_data_set([
                                         Path('../data/PTSD'),
-                                        Path('../data/Fibro'),
+                                        # Path('../data/Fibro'),
                                         # Path('../../data/3D'),
                                         ])
     net = torch.load('../sequence_last_run.pt')
-    all_features = ['STAI', 'TAS']
-    for feature in ['STAI', 'TAS']:
-        emb_reg = BaseRegression(train_dl, test_dl, net.rnn.initilaizer, (fibro_md, ptsd_md), 1)
+    all_features = ['STAI', 'TAS', 'CAPS-5']
+    for feature in ['CAPS-5']:
+        emb_reg = EmbeddingPredictor(train_dl, test_dl, net.rnn.initilaizer, [ptsd_md], 1)
         print(f'Results for {feature} Prediction:')
         var = emb_reg.dummy_prediction_error(feature)
         print(f'    dummy = {var}')
@@ -144,6 +149,6 @@ if __name__ == '__main__':
         svr_loss = emb_reg.svr_prediction_error(feature, auxilary_features)
         print(f'    svr = {svr_loss}')
 
-        # emb_reg.fit(500, feature)
+        emb_reg.train(30000, feature)
 
     print(f'svr_loss:{svr_loss}')

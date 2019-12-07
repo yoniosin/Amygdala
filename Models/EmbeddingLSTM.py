@@ -38,10 +38,7 @@ class EmbeddingLSTM(nn.Module):
                 x_i = x[..., t]
                 y_prev = y[..., t - 1] if t >= 1 else torch.zeros(x_i.shape)
                 # concatenate Xt, Yt-1
-                try:
-                    x_i = torch.stack((x_i, y_prev), dim=-1)
-                except RuntimeError:
-                    print()
+                x_i = torch.stack((x_i, y_prev), dim=-1)
                 h, c = cell(x_i, h, c, embed, self.use_embeddings)
                 inner_cell_out.append(h)
 
@@ -52,7 +49,7 @@ class EmbeddingLSTM(nn.Module):
 
 
 class EmbeddingLSTMCell(nn.Module):
-    """Regular LSTM cell with an option to initiate cell state with embeddings"""
+    """Vanilla LSTM cell"""
     def __init__(self, input_size, hidden_size, embedding_fc):
         super().__init__()
         self.input_size = input_size
@@ -84,6 +81,7 @@ class EmbeddingLSTMCell(nn.Module):
 
 
 class ConcatEmbeddingLSTMCell(EmbeddingLSTMCell):
+    """Concatenate embedding to input tensor"""
     def gen_gate(self):
         return nn.Linear(self.input_size + 2 * self.hidden_size, self.hidden_size)
 

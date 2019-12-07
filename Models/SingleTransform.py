@@ -7,6 +7,7 @@ from Models.EmbeddingLSTM import EmbeddingLSTM
 from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
 from abc import abstractmethod
+from util.Subject import calc_linear_stats
 
 
 class STNet(nn.Module):
@@ -52,6 +53,9 @@ class SequenceTransformNet(nn.Module):
         self.fc1 = nn.Linear(seq_len * hidden_size, seq_len * spacial_size)
         self.fc2 = nn.Linear(seq_len, output_size[-1])
 
+    @property
+    def out_features(self): return self.fc1.out_features
+
     def forward(self, x, subject_id, y):
         split = torch.split(x, 1, dim=1)
         xT = torch.cat([self.single_transform(x_i) for x_i in split], dim=-1)
@@ -65,8 +69,8 @@ class ClassifyingNetwork(nn.Module):
         super().__init__()
         self.n_windows = n_windows
         self.seq_len = seq_len
-        # 2 in_channels are (Watch, Regulate)
-        self.conv = nn.Conv3d(2, n_filters, conv_kernel_size)
+        channels_n = 2  # 2 in_channels are (Watch, Regulate)
+        self.conv = nn.Conv3d(channels_n, n_filters, conv_kernel_size)
         self.mlp = nn.Sequential(nn.Linear(n_filters, embedding_size),
                                  nn.Sigmoid(),
                                  nn.Linear(embedding_size, embedding_size))
@@ -87,28 +91,29 @@ class ClassifyingNetwork(nn.Module):
         return nn.Softmax(dim=1)(self.final_fc(mlp_out))
 
 
-class ClassifyingBaseLine(nn.Module):
-    """Receives varied size images and classifies the subject"""
-    def __init__(self, n_classes, stats_per_time, seq_len, n_windows):
+class StatisticalLinearBaseLine(nn.Module):
+    """
+    Receives varied size images.
+    If n_outputs == 1, performs regression.
+    Otherwise, classifies to n_outputs classes
+    """
+
+    def __init__(self, n_outputs, seq_len, n_windows, input_channels=2, stats_per_time=2):
+        """
+        input_channels - watch + regulate
+        stats_per_time- mean + variance
+        """
         super().__init__()
         self.n_windows = n_windows
-        self.fc = nn.Linear(stats_per_time * seq_len, n_classes)
+        self.fc = nn.Linear(input_channels * stats_per_time * seq_len, n_outputs)
 
     def forward(self, batch):
         """
         Calculate variance and mean for every timestamp. Concatenates to [batch_size, 2] tensor,
         which is fed to a FC layer
         """
-        def calc_stats(s):
-            flattened_time = torch.cat([s[i] for i in range(self.n_windows)], dim=-1)
-            mean = torch.mean(flattened_time.view(flattened_time.size(-1), -1), dim=-1)
-            var = torch.var(flattened_time.view(flattened_time.size(-1), -1), dim=-1)
-
-            return mean, var
-
-        mean_list, var_list = zip(*[calc_stats(subject) for subject in batch])
-        all_results = torch.cat((torch.stack(mean_list), torch.stack(var_list)), dim=1)
-        y = nn.Softmax()(self.fc(all_results))
+        all_results = calc_linear_stats(batch, (1, 2, 3))
+        y = self.fc(all_results.view(all_results.shape[0], -1))
         return y
 
 
@@ -129,7 +134,9 @@ class BaseModel:
 
     def update_logger(self, writer, train_stats, test_stats, epoch):
         writer.add_scalar('train_loss', np.mean(train_stats), epoch)
+        print(f'epoch# {epoch}, train error = {np.mean(train_stats)}')
         writer.add_scalar('test_loss', np.mean(test_stats), epoch)
+        print(f'epoch# {epoch}, test error = {np.mean(test_stats)}')
 
     def train(self, n_epochs):
         bar = progressbar.ProgressBar()
@@ -209,20 +216,20 @@ class STModel(ReconstructiveModel):
 
 
 class ClassifyingModel(BaseModel):
-    def __init__(self, input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, baseline):
+    def __init__(self, n_subjects, input_shape, hidden_size, md: LearnerMetaData, train_dl, test_dl, baseline):
         self.baseline = baseline
-        super().__init__(input_shape, hidden_size, md, train_dl, test_dl, name='classifier', loss_func=nn.BCELoss())
+        super().__init__(n_subjects, input_shape, hidden_size, md, train_dl, test_dl, name='classifier', loss_func=nn.BCELoss())
 
     def build_NN(self, input_shape, *kwargs):
-        return ClassifyingBaseLine(2, 2, 42, 3) if self.baseline else ClassifyingNetwork(2, 10, 3, 6, 3, 42)
+        return StatisticalLinearBaseLine(2, 2, 28, 2) if self.baseline else ClassifyingNetwork(2, 10, 3, 6, 3, 28)
 
     def calc_signals(self, batch, train):
         def create_target(label):
-            if label == 'healthy': return torch.tensor((1, 0))
+            if label == 'PTSD': return torch.tensor((1, 0))
             else: return torch.tensor((0, 1))
 
-        data = torch.cat([batch['data'][:, i] for i in range(self.n_windows)], dim=-1)
-        target = torch.stack([create_target(label) for label in batch['type']]).float()
+        data = Variable(torch.cat([batch['data'][:, i] for i in range(self.n_windows)], dim=-1), requires_grad=train)
+        target = Variable(torch.stack([create_target(label) for label in batch['type']]).float(), requires_grad=False)
         return self.net(data), target
 
     def calc_loss(self, output, target, train):
