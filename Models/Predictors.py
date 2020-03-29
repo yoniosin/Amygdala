@@ -163,8 +163,7 @@ class ClassifyingModel(FmriModel):
 
 
 class EmbeddingPredictor(BaseModel):
-    def __init__(self, train_dl, test_dl, embedding_layer, meta_data_iter: Iterable, n_outputs, feature,
-                 run_name):
+    def __init__(self, train_dl, test_dl, embedding_layer, meta_data_iter: Iterable, n_outputs, feature, run_name):
 
         self.predicted_feature = feature
         self._embed = embedding_layer
@@ -183,43 +182,8 @@ class EmbeddingPredictor(BaseModel):
 
     def build_NN(self, **kwargs): return nn.Linear(self._embed.out_features, self.n_outputs)
 
-    # def calc_loss(self, target, output, train: bool):
-    #     loss = self.loss_func(output, target)
-    #     if train:
-    #         loss.backward()
-    #         self.optimizer.step()
-    #         self.optimizer.zero_grad()
-    #
-    #     return loss
-
     def get_embedding(self, one_hot):
         return self._embed(one_hot)
-
-    # def train(self, n_epochs):
-    #     bar = progressbar.ProgressBar()
-    #     writer = SummaryWriter(f'binned_runs/{self.predicted_feature}_{self.get_run_num()}')
-    #     for epoch in bar(range(n_epochs)):
-    #         train_stats = self.run_model(train=True)
-    #         test_stats = self.test()
-    #         self.update_logger(writer, train_stats, test_stats, epoch)
-    #
-    #     writer.close()
-
-    # def update_logger(self, writer, train_stats, test_stats, epoch):
-    #     writer.add_scalar('train_loss', torch.mean(torch.tensor(train_stats)), epoch)
-    #     writer.add_scalar('test_loss', torch.mean(torch.tensor(test_stats)), epoch)
-
-    # def run_model(self, train: bool):
-    #     dl = self.train_dl if train else self.test_dl
-    #     res = []
-    #     for batch in dl:
-    #         res.append(self.run_batch(batch, train))
-    #
-    #     return res
-
-    # def run_batch(self, batch, train: bool):
-    #     output, target = self.calc_signals(batch, train)
-    #     return self.calc_loss(output, target, train)
 
     def calc_signals(self, batch, train: bool):
         input_ = self.get_input_from_batch(batch, train)
@@ -230,10 +194,6 @@ class EmbeddingPredictor(BaseModel):
 
     def get_input_from_batch(self, batch, train: bool):
         return Variable(self.get_embedding(batch['one_hot']), requires_grad=train)
-
-    # def test(self):
-    #     with torch.no_grad():
-    #         return self.run_model(train=False)
 
     def construct_target_tensor(self, batch):
         t = [self.calc_target(float(self.full_dict[s][self.predicted_feature])) for s in batch['sub_num']]
@@ -264,8 +224,7 @@ class EmbeddingPredictor(BaseModel):
 
 
 class EmbeddingClassifier(EmbeddingPredictor):
-    def __init__(self, train_dl, test_dl, embedding_layer, meta_data_iter: Iterable, feature, run_num,
-                 n_outputs):
+    def __init__(self, train_dl, test_dl, embedding_layer, meta_data_iter: Iterable, feature, run_num, n_outputs):
 
         super().__init__(train_dl, test_dl, embedding_layer, meta_data_iter, n_outputs, feature,
                          run_name=f'{self.run_type}{feature}#{run_num}')
@@ -317,7 +276,16 @@ class EmbeddingClassifier(EmbeddingPredictor):
 
 
 class EmbeddingClassifierBaseline(EmbeddingClassifier):
-    def build_NN(self, **kwargs): return StatisticalLinearBaseLine(self.n_outputs, 28, 2)
+    def __init__(self, net_type, train_dl, test_dl, embedding_layer, meta_data_iter: Iterable, feature, run_num,
+                 n_outputs):
+        self.net_type = net_type
+        super().__init__(train_dl, test_dl, embedding_layer, meta_data_iter, feature, run_num, n_outputs)
+
+    def build_NN(self):
+        if self.net_type == 'stat':
+            return StatisticalLinearBaseLine(self.n_outputs, 28, 2)
+        else:
+            return Net.CNNBaseline(10, 3, self.n_outputs)
 
     def get_input_from_batch(self, batch, train: bool):
         data = batch['data']

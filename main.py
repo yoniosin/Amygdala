@@ -132,15 +132,17 @@ if __name__ == '__main__':
     embedding_params = {'embedding_layer': torch.load('sequence_last_run.pt').rnn.initilaizer,
                         'meta_data_iter': [db.meta_data for db in db_list],
                         'run_num': md.run_num,
-                        'feature': 'TAS',
-                        'n_outputs': 9}
+                        'feature': 'sex',
+                        'n_outputs': 5,
+                        # 'net_type': 'cnn'
+                        }
 
-    # model = Prd.ReconstructiveModel(**data_loaders, **network_params, md=md)
-    model = Prd.EmbeddingClassifier(**data_loaders, **embedding_params)
+    model = Prd.ReconstructiveModel(**data_loaders, **network_params, md=md)
+    # model = Prd.EmbeddingClassifier(**data_loaders, **embedding_params)
     # model = Prd.EmbeddingClassifierBaseline(**data_loaders, **embedding_params)
     train_nn = True
     if train_nn:
-        model.train(1)
+        model.train(1000)
         if binned:
             json.dump({"last_run": md.run_num}, open('binned_runs/last_run.json', 'w'))
         else:

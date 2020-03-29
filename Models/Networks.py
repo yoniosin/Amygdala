@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 from Models.EmbeddingLSTM import EmbeddingLSTM
+from itertools import chain
 
 
 class SequenceTransformNet(nn.Module):
@@ -12,7 +13,7 @@ class SequenceTransformNet(nn.Module):
     """
     def __init__(self, input_shape, hidden_size, output_size, use_embeddings, n_subjects):
         super().__init__()
-        self.single_transform = torch.load(open('single_run.pt', 'rb'))  # load preciously trained ST
+        self.single_transform = torch.load(open('single_run.pt', 'rb'))  # load previously trained ST
         phases, _, height, width, depth, phase_len = input_shape
         seq_len = phases * phase_len
         self.out_sizes = [height, width, depth, seq_len]
@@ -36,14 +37,14 @@ class SequenceTransformNet(nn.Module):
 
 
 class NewSTNet(nn.Module):
-    """This Module finds a mapping between passive windows to active windows, using a FCN"""
+    """This Module finds a mapping between passive windows to active windows, using denoising AutoEncoders"""
     def __init__(self, **kwargs):
         super().__init__()
         input_shape = kwargs['input_shape']
         sizes = [1, 2, 4, 8, 8, 4, 2, 1]
         self.layers_n = len(sizes) - 1
+        input_size = input_shape[-1]
         for i in range(self.layers_n):
-            input_size = input_shape[-1]
             in_size = sizes[i]
             out_size = sizes[i+1]
             setattr(self, f'l{i}', nn.Linear(input_size * in_size, input_size * out_size))
@@ -119,3 +120,18 @@ class StatisticalLinearBaseLine(nn.Module):
         all_results = calc_linear_stats((1, 2, 3))
         y = self.fc(all_results.view(all_results.shape[0], -1))
         return y
+
+
+class CNNBaseline(nn.Module):
+    def __init__(self, filter_n, mlp_len, n_outputs):
+        super().__init__()
+        self.conv = nn.Conv3d(56, filter_n, kernel_size=3)
+        final_layer = nn.Linear(filter_n, n_outputs)
+        self.mlp = nn.Sequential(*chain(*[(nn.Linear(filter_n, filter_n), nn.ReLU()) for _ in range(mlp_len)]),
+                                 final_layer)
+
+    def forward(self, x):
+        x = torch.cat((x[:, 0], x[:, 1]), dim=-1).transpose(-1, 1)
+        z = self.conv(x)
+        z = torch.mean(z, dim=(2, 3, 4))
+        return self.mlp(z)
