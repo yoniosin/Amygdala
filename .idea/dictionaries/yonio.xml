@@ -2,6 +2,10 @@
   <dictionary name="yonio">
     <words>
       <w>amyg</w>
+      <w>datasets</w>
+      <w>fibro</w>
+      <w>ptsd</w>
+      <w>voxels</w>
     </words>
   </dictionary>
 </component>
