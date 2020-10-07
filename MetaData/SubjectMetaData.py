@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 from util.AmygDataSet import AmygDataSet, ScoresAmygDataset
 from torch.utils.data import DataLoader
-from util.config import LearnerMetaData
+from util.config import fMRILearnerConfig
 from typing import List
 from abc import abstractmethod
 
@@ -111,11 +111,11 @@ def load_data_set(data_location: List[Path]):
     if load and Path('test_meta_dl.pt').exists() and Path('train_meta_dl.pt').exists():
         return torch.load('train_meta_dl.pt'), torch.load('test_meta_dl.pt')
 
-    md = LearnerMetaData(batch_size=10,
-                         train_ratio=0.7,
-                         run_num=100,
-                         use_embeddings='init',
-                         )
+    md = fMRILearnerConfig(batch_size=10,
+                           train_ratio=0.7,
+                           run_num=100,
+                           use_embeddings='init',
+                           )
 
     ds = ScoresAmygDataset(data_location, md)
     train_ds, test_ds = ds.train_test_split()

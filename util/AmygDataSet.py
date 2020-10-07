@@ -1,12 +1,13 @@
 import torch
 from torch.utils.data import Dataset, random_split
-from util.config import LearnerMetaData
+from util.config import fMRILearnerConfig
 from pathlib import Path
 import pickle
 import os
 import json
 import re
 from typing import Iterable
+from .Subject import EEGSubjectPTSD
 
 
 class AmygDataSet(Dataset):
@@ -15,12 +16,12 @@ class AmygDataSet(Dataset):
     :param subjects_path - path to pre-created json files containing subject's data
     :param md - meta-data objects"""
 
-    def __init__(self, subjects_path: Iterable[Path], md: LearnerMetaData, load=False):
-        self.subjects_dict = self.load_ds() if load else self.build_ds(subjects_path, md)
+    def __init__(self, subjects_path: Iterable[Path], md: fMRILearnerConfig, load=False):
+        self.subjects_list = self.load_ds() if load else self.build_ds(subjects_path, md)
         self.train_len = int(len(self) * md.train_ratio)
         self.test_len = len(self) - self.train_len
 
-    def build_ds(self, subjects_dir_iter: Iterable[Path], md: LearnerMetaData):
+    def build_ds(self, subjects_dir_iter: Iterable[Path], md: fMRILearnerConfig):
         """:returns dictionary with subjects data, which is constructed using get_subject_data()"""
         def generate_subject():
             def create_one_hot(idx):
@@ -63,25 +64,25 @@ class AmygDataSet(Dataset):
             raise IOError('Missing Train File')
 
     def __len__(self):
-        return len(self.subjects_dict)
+        return len(self.subjects_list)
 
     def __getitem__(self, item):
-        return self.subjects_dict[item]
+        return self.subjects_list[item]
 
     def get_sample_shape(self):
-        return self.subjects_dict[0]['input_shape']
+        return self.subjects_list[0]['input_shape']
 
     def get_subjects_list(self):
         return list(map(lambda x: x[0].item(), self))
 
     def save(self):
-        torch.save(self.subjects_dict, open('_'.join(('3d', 'dataset.pt')), 'wb'))
+        torch.save(self.subjects_list, open('_'.join(('3d', 'dataset.pt')), 'wb'))
 
     def train_test_split(self):
         train_ds, test_ds = random_split(self, (self.train_len, self.test_len))
-        train_list = [e['sub_num'] for e in train_ds]
-        test_list = [e['sub_num'] for e in test_ds]
-        json.dump({'train': train_list, 'test': test_list}, open('split.json', 'w'))
+        train_list = [e['medical_idx'] for e in train_ds]
+        test_list = [e['medical_idx'] for e in test_ds]
+        json.dump({'train': train_list, 'test': test_list}, open('split_eeg.json', 'w'))
 
         return train_ds, test_ds
 
@@ -90,10 +91,35 @@ class ScoresAmygDataset(AmygDataSet):
     """
     kwargs should include 'subject_path' and 'md'
     """
-    def __init__(self, subjects_data_path: Iterable[Path], md: LearnerMetaData, load=False):
+    def __init__(self, subjects_data_path: Iterable[Path], md: fMRILearnerConfig, load=False):
         self.invalid = json.load(open('invalid_subjects.json', 'r'))
         super().__init__(subjects_data_path, md, load)
 
     def is_subject_valid(self, subject_num):
         return int(subject_num) not in self.invalid
+
+
+class EEGDataSet(AmygDataSet):
+    def __init__(self, subjects_path: Iterable[Path], md: fMRILearnerConfig):
+        super().__init__(subjects_path, md)
+
+        self.data_shape = self.subjects_list[0].data_shape
+
+    def build_ds(self, subjects_dir_iter: Iterable[Path], md: fMRILearnerConfig):
+        subjects_list = []
+        for subjects_dir in subjects_dir_iter:
+            for path in Path(subjects_dir).iterdir():
+                with open(path, 'rb') as file:
+                    subject = pickle.load(file)
+                subjects_list.append(subject)
+
+        return subjects_list
+
+    def __len__(self):
+        return len(self.subjects_list)
+
+    def __getitem__(self, item):
+        return self.subjects_list[item].get_data()
+
+    def get_sample_shape(self): return self.data_shape
 

@@ -1,4 +1,4 @@
-from util.config import LearnerMetaData
+from util.config import fMRILearnerConfig
 from torch import nn, optim
 import progressbar
 import torch
@@ -77,7 +77,7 @@ class BaseModel(ABC):
 
 class FmriModel(BaseModel, ABC):
     """Abstract method which defines high level function for seq2seq predictors"""
-    def __init__(self, md: LearnerMetaData, train_dl, test_dl, run_name, **net_params):
+    def __init__(self, md: fMRILearnerConfig, train_dl, test_dl, run_name, **net_params):
         self.n_windows = md.train_windows + 1
         super().__init__(train_dl, test_dl, run_name, run_logger_path=md.logger_path,
                          use_embeddings=md.use_embeddings, **net_params)
@@ -91,7 +91,7 @@ class FmriModel(BaseModel, ABC):
 
 
 class ReconstructiveModel(FmriModel):
-    def __init__(self, md: LearnerMetaData, train_dl, test_dl, **net_params):
+    def __init__(self, md: fMRILearnerConfig, train_dl, test_dl, **net_params):
         super().__init__(md, train_dl, test_dl, **net_params, run_name=f'sequence_{md.run_num}')
 
     def loss_func(self): return nn.MSELoss()
@@ -101,13 +101,9 @@ class ReconstructiveModel(FmriModel):
         x = Variable(x, requires_grad=train)
         y = self.extract_active(batch['data'])
         target = Variable(y, requires_grad=False)
-        output = self.calc_out(x, one_hot=batch['one_hot'], y=y)
+        output = self.net(x, one_hot=batch['one_hot'], y=y)
 
         return output, target
-
-    def calc_out(self, input_, **kwargs):
-        output, c = self.net(input_, kwargs['one_hot'], kwargs['y'])
-        return output
 
     def extract_active(self, data): return self.extract_part_from_data(data, 1)
 
@@ -118,7 +114,7 @@ class ReconstructiveModel(FmriModel):
 
 
 class STModel(ReconstructiveModel):
-    def __init__(self, md: LearnerMetaData, train_dl, test_dl, **net_params):
+    def __init__(self, md: fMRILearnerConfig, train_dl, test_dl, **net_params):
         super().__init__(md, train_dl, test_dl, **net_params)
 
     def build_NN(self, **kwargs): return Net.NewSTNet(**kwargs)
@@ -129,7 +125,7 @@ class STModel(ReconstructiveModel):
 
 
 class ClassifyingModel(FmriModel):
-    def __init__(self, md: LearnerMetaData, train_dl, test_dl, baseline):
+    def __init__(self, md: fMRILearnerConfig, train_dl, test_dl, baseline):
         self.baseline = baseline
         super().__init__(md, train_dl, test_dl)
 
@@ -301,3 +297,23 @@ class EmbeddingClassifierBaseline(EmbeddingClassifier):
 
     @property
     def run_type(self): return 'baseline_'
+
+
+class EEGModel(BaseModel):
+    def __init__(self, train_dl, test_dl, md, **net_params):
+        super().__init__(train_dl, test_dl, run_name=f'eeg_{md.run_num}',
+                         run_logger_path=md.logger_path, **net_params)
+
+    def calc_signals(self, batch, train):
+        watch = Variable(batch['watch'].squeeze(), requires_grad=train)
+        regulate = Variable(batch['regulate'].float(), requires_grad=False)
+        output = self.net(watch, regulate)
+
+        return regulate, output
+
+    def loss_func(self):
+        return nn.MSELoss()
+
+    def build_NN(self, **kwargs):
+        return Net.EEGNetwork(**kwargs)
+

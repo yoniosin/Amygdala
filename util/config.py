@@ -39,30 +39,50 @@ class ROIData:
 
 
 @dataclass
-class LearnerMetaData:
+class LearnerConfig:
     run_num: int
-    use_embeddings: str
     batch_size: int = 2
     train_ratio: float = 0.8
     train_windows: int = 2
     total_subject: int = field(init=False)
-    min_w: int = field(init=False)
-    voxels_num: int = field(init=False)
-    in_channels: int = field(init=False)
     logger_path: str = field(init=False)
     runs_dir: str = 'runs'
 
     def __post_init__(self):
+        self.validate_config()
+
+    def validate_config(self):
         assert 0 < self.train_ratio < 1
-        assert 0 < self.train_windows < 5
+
+
+@dataclass
+class fMRILearnerConfig(LearnerConfig):
+    use_embeddings: str = None
+    min_w: int = field(init=False)
+    voxels_num: int = field(init=False)
+    in_channels: int = field(init=False)
+
+    def __post_init__(self):
         # meta_dict = json.load(open('meta.txt', 'r'))
         # self.total_subject = 60
+        super().__post_init__()
         self.min_w = 14
         # self.voxels_num = meta_dict['voxels_num']
         self.in_channels = self.train_windows * 2 + 1
         self.logger_path = f'{self.runs_dir}/run#{self.run_num}({self.use_embeddings})'
 
     def to_json(self): return asdict(self)
+
+    def validate_config(self):
+        super().validate_config()
+        assert 0 < self.train_windows < 5
+
+
+@dataclass
+class EEGLearnerConfig(LearnerConfig):
+    def __post_init__(self):
+        super().__post_init__()
+        self.logger_path = f'{self.runs_dir}/eeg/run#{self.run_num}'
 
 
 @dataclass

@@ -2,6 +2,7 @@ from torch import nn
 import torch
 from Models.EmbeddingLSTM import EmbeddingLSTM
 from itertools import chain
+from util.Subject import PairedWindows
 
 
 class SequenceTransformNet(nn.Module):
@@ -135,3 +136,24 @@ class CNNBaseline(nn.Module):
         z = self.conv(x)
         z = torch.mean(z, dim=(2, 3, 4))
         return self.mlp(z)
+
+
+class EEGNetwork(nn.Module):
+    def __init__(self, watch_len, reg_len, watch_hidden_size, reg_hidden_size):
+        super().__init__()
+        self.reg_len = reg_len
+        self.watch_hidden_size = watch_hidden_size
+
+        self.watch_enc = torch.nn.Linear(watch_len, watch_hidden_size * reg_len).float()
+        self.regulate_enc = torch.nn.LSTM(1, reg_hidden_size, batch_first=True).float()
+        self.fc = torch.nn.Linear(watch_hidden_size + reg_hidden_size, 1).float()
+
+    def forward(self, watch, regulate):
+        watch_rep = self.watch_enc(watch.float()).reshape(-1, self.reg_len, self.watch_hidden_size)
+        regulate_rep = self.regulate_enc(regulate.float())[0]
+
+        joint_rep = torch.cat((watch_rep, regulate_rep), dim=-1)
+
+        out = self.fc(joint_rep)
+        return out
+
