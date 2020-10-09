@@ -1,4 +1,4 @@
-from util.config import fMRILearnerConfig, EEGLearnerConfig
+from util.config import EEGLearnerConfig
 from util.AmygDataSet import ScoresAmygDataset, EEGDataSet
 from pathlib import Path
 import torch
@@ -9,6 +9,8 @@ from MetaData.SubjectMetaData import FibroSubjectMetaData, PTSDSubjectMetaData, 
 from dataclasses import dataclass
 import Models.Predictors as Prd
 from util.Subject import EEGSubjectPTSD, PairedWindows, EEGWindow
+import hydra
+from hydra.core.config_store import ConfigStore
 
 
 @dataclass
@@ -16,7 +18,7 @@ class DBWrapper:
     db_type: str
     data_path: Path
     meta_data_path: str
-    split_path: str = 'split.json'
+    split_path: str = '../../../split.json'
 
     def generate_meta_data(self):
         if self.db_type == 'healthy':
@@ -31,19 +33,19 @@ class DBWrapper:
         self.meta_data = meta_data_type(self.meta_data_path, self.split_path)
 
 
-def load_data_set(db_wrapper_list: Iterable[DBWrapper], load):
+def load_data_set(db_wrapper_list: Iterable[DBWrapper], cfg):
     ds_location = Path('data/eeg')
-    if load and (ds_location / 'train.pt').exists() and (ds_location / 'test.pt').exists():
+    if cfg.data.load and (ds_location / 'train.pt').exists() and (ds_location / 'test.pt').exists():
         return torch.load(ds_location / 'train.pt'), torch.load(ds_location / 'test.pt'), torch.load(
             ds_location / 'input_shape.pt')
 
-    ds = EEGDataSet([db.data_path for db in db_wrapper_list], md)
+    ds = EEGDataSet([db.data_path for db in db_wrapper_list], cfg)
     train_ds, test_ds = ds.train_test_split()
 
-    train_dl_ = DataLoader(train_ds, batch_size=md.batch_size, shuffle=True)
-    torch.save(train_dl_, 'data/eeg/train.pt')
-    test_dl_ = DataLoader(test_ds, batch_size=md.batch_size, shuffle=True)
-    torch.save(test_dl_, 'data/eeg/test.pt')
+    train_dl_ = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True)
+    torch.save(train_dl_, '../../../data/eeg/train.pt')
+    test_dl_ = DataLoader(test_ds, batch_size=cfg.batch_size, shuffle=True)
+    torch.save(test_dl_, '../../../data/eeg/test.pt')
     # torch.save(ds.get_sample_shape(), 'data/input_shape.pt')
     return train_dl_, test_dl_, ds.get_sample_shape()
 
@@ -75,58 +77,44 @@ def load_data_set(db_wrapper_list: Iterable[DBWrapper], load):
 
 
 def prepare_run():
-    run_num = json.load(open('runs/eeg/last_run.json', 'r'))['last'] + 1
 
     # if args.create_mapping:
     #     create_mapping([Path('../Amygdala/data/3D'), Path('data/PTSD'), Path('data/Fibro')])
 
     return EEGLearnerConfig(batch_size=10,
                             train_ratio=0.9,
-                            run_num=run_num,
                             train_windows=1
                             )
 
 
-def upload_db(db_type_list):
-    paths = {'healthy': (Path('../Amygdala/data/3D'), '../Amygdala/MetaData/fDemog.csv'),
-             'PTSD': (Path('data/eeg/processed/PTSD'), 'MetaData/PTSD/Clinical.csv'),
-             'Fibro': (Path('data/Fibro'), 'MetaData/Fibro/Clinical.csv')}
+def upload_db(cfg):
+    db_list_ = [DBWrapper(db_type, *cfg.data.paths[db_type]) for db_type in cfg.data.db_type]
+    train_dl_, test_dl_, input_shape_ = load_data_set(db_list_, cfg)
+    # for db in db_list_:
+    #     db.generate_meta_data()
+    return {'train_dl': train_dl_, 'test_dl': test_dl_}
 
-    db_list_ = [DBWrapper(db_type, *paths[db_type]) for db_type in db_type_list]
-    train_dl_, test_dl_, input_shape_ = load_data_set(db_list_, load=load_ds)
-    network_params_ = {'watch_len': 20, 'reg_len': 60, 'watch_hidden_size': 15, 'reg_hidden_size': 16}
-    for db in db_list_:
-        db.generate_meta_data()
-    return {'train_dl': train_dl_, 'test_dl': test_dl_}, network_params_, db_list_
+
+@hydra.main(config_name='eeg')
+def main(cfg: EEGLearnerConfig):
+    run_path = Path('C:/Users/yonio/PycharmProjects/Amygdala_new/runs/eeg/last_run.json')
+    run_num = json.load(open(str(run_path), 'r'))['last'] + 1
+    cfg.run_num = run_num
+    update_cfg(cfg)
+
+    data_loaders = upload_db(cfg)
+
+    model = Prd.EEGModel(**data_loaders, **cfg.net, run_num=run_num, logger_path=cfg.logger_path)
+    model.train(cfg.max_epochs)
+    json.dump({"last": run_num}, open(str(run_path), 'w'))
+
+
+def update_cfg(cfg: EEGLearnerConfig):
+    assert 0 < cfg.train_ratio <= 1
+    cfg.logger_path = f'{cfg.runs_dir}/eeg/run#{cfg.run_num}'
 
 
 if __name__ == '__main__':
-    # binned = True
-    # parser = ArgumentParser()
-    # parser.add_argument('embed', type=str, choices=['none', 'init', 'concat'])
-    # parser.add_argument('-m', '--create_mapping', action='store_true')
-    net_hidden_size = 16
-    load_ds = False
-
-    # args = parser.parse_args()
-    md = prepare_run()
-
-    data_loaders, network_params, db_list = upload_db([
-        # 'healthy',
-        'PTSD',
-        # 'Fibro',
-    ])
-
-    # embedding_params = {'embedding_layer': torch.load('sequence_last_run.pt').rnn.initilaizer,
-    #                     'meta_data_iter': [db.meta_data for db in db_list],
-    #                     'run_num': md.run_num,
-    #                     'feature': 'sex',
-    #                     'n_outputs': 5,
-    #                     # 'net_type': 'cnn'
-    #                     }
-
-    model = Prd.EEGModel(**data_loaders, **network_params, md=md)
-    # model = Prd.EmbeddingClassifier(**data_loaders, **embedding_params)
-    # model = Prd.EmbeddingClassifierBaseline(**data_loaders, **embedding_params)
-    model.train(1000)
-    json.dump({"last": md.run_num}, open('runs/last_run.json', 'w'))
+    cs = ConfigStore()
+    cs.store(name='eeg', node=EEGLearnerConfig)
+    main()

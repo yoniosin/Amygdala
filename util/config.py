@@ -4,6 +4,7 @@ import json
 import numpy as np
 from oct2py import Oct2Py
 from pathlib import Path
+from omegaconf import MISSING
 
 
 def load_mat(path):
@@ -40,16 +41,14 @@ class ROIData:
 
 @dataclass
 class LearnerConfig:
-    run_num: int
+    run_num: int = MISSING
+    max_epochs: int = 1000
     batch_size: int = 2
     train_ratio: float = 0.8
     train_windows: int = 2
-    total_subject: int = field(init=False)
-    logger_path: str = field(init=False)
+    total_subject: int = MISSING
+    logger_path: str = MISSING
     runs_dir: str = 'runs'
-
-    def __post_init__(self):
-        self.validate_config()
 
     def validate_config(self):
         assert 0 < self.train_ratio < 1
@@ -62,10 +61,9 @@ class fMRILearnerConfig(LearnerConfig):
     voxels_num: int = field(init=False)
     in_channels: int = field(init=False)
 
-    def __post_init__(self):
+    def update_cfg(self):
         # meta_dict = json.load(open('meta.txt', 'r'))
         # self.total_subject = 60
-        super().__post_init__()
         self.min_w = 14
         # self.voxels_num = meta_dict['voxels_num']
         self.in_channels = self.train_windows * 2 + 1
@@ -79,11 +77,28 @@ class fMRILearnerConfig(LearnerConfig):
 
 
 @dataclass
-class EEGLearnerConfig(LearnerConfig):
-    def __post_init__(self):
-        super().__post_init__()
-        self.logger_path = f'{self.runs_dir}/eeg/run#{self.run_num}'
+class EEGNetConfig:
+    watch_hidden_size: int = 15
+    reg_hidden_size: int = 16
+    watch_len: int = 20
+    reg_len: int = 60
 
+
+
+@dataclass
+class EEGData:
+    db_type: list = field(default_factory=lambda: ['PTSD'])
+    load: bool = False
+    paths: dict = field(
+        default_factory=lambda: {'healthy': ('../Amygdala/data/3D', '../Amygdala/MetaData/fDemog.csv'),
+                                 'PTSD': ('../../../data/eeg/processed/PTSD', 'MetaData/PTSD/Clinical.csv'),
+                                 'Fibro': ('data/Fibro', 'MetaData/Fibro/Clinical.csv')})
+
+
+@dataclass
+class EEGLearnerConfig(LearnerConfig):
+    net: EEGNetConfig = EEGNetConfig()
+    data: EEGData = EEGData()
 
 @dataclass
 class SubjectMetaData:

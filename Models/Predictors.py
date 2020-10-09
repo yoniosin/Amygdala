@@ -300,9 +300,9 @@ class EmbeddingClassifierBaseline(EmbeddingClassifier):
 
 
 class EEGModel(BaseModel):
-    def __init__(self, train_dl, test_dl, md, **net_params):
-        super().__init__(train_dl, test_dl, run_name=f'eeg_{md.run_num}',
-                         run_logger_path=md.logger_path, **net_params)
+    def __init__(self, train_dl, test_dl, run_num, logger_path, **net_params):
+        super().__init__(train_dl, test_dl, run_name=f'eeg_{run_num}',
+                         run_logger_path=logger_path, **net_params)
 
     def calc_signals(self, batch, train):
         watch = Variable(batch['watch'].squeeze(), requires_grad=train)

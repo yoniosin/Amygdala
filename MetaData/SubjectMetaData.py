@@ -20,7 +20,7 @@ class SubjectsMetaData:
         self.train_dict, self.test_dict = {}, {}
         self.train_data, self.test_data = None, None
         split = json.load(open(split_path, 'r'))
-        self.invalid = json.load(open('invalid_subjects.json', 'r'))
+        self.invalid = json.load(open('../../../invalid_subjects.json', 'r'))
         self.train_list = split['train']
         self.test_list = split['test']
 
