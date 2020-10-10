@@ -1,8 +1,7 @@
 from torch import nn
 import torch
-from Models.EmbeddingLSTM import EmbeddingLSTM
+from Models.EmbeddingLSTM import EmbeddingLSTM, EEGEmbedingLSTM
 from itertools import chain
-from util.Subject import PairedWindows
 
 
 class SequenceTransformNet(nn.Module):
@@ -139,21 +138,27 @@ class CNNBaseline(nn.Module):
 
 
 class EEGNetwork(nn.Module):
-    def __init__(self, watch_len, reg_len, watch_hidden_size, reg_hidden_size):
+    def __init__(self, watch_len, reg_len, watch_hidden_size, reg_hidden_size, n_subjects=None):
         super().__init__()
         self.reg_len = reg_len
         self.watch_hidden_size = watch_hidden_size
 
         self.watch_enc = torch.nn.Linear(watch_len, watch_hidden_size * reg_len).float()
-        self.regulate_enc = torch.nn.LSTM(1, reg_hidden_size, batch_first=True).float()
-        self.fc = torch.nn.Linear(watch_hidden_size + reg_hidden_size, 1).float()
+        self.regulate_enc = EEGEmbedingLSTM(reg_hidden_size, n_subjects).float()
+        # self.regulate_enc = torch.nn.LSTM(1, reg_hidden_size, batch_first=True).float()
+        self.fc = torch.nn.Linear(watch_hidden_size + reg_hidden_size[-1], 1).float()
 
-    def forward(self, watch, regulate):
-        watch_rep = self.watch_enc(watch.float()).reshape(-1, self.reg_len, self.watch_hidden_size)
-        regulate_rep = self.regulate_enc(regulate.float())[0]
+    def forward(self, watch, regulate, subject_id):
+        watch_rep = self.watch_enc(watch.float())
+        watch_rep = watch_rep.reshape(-1, self.watch_hidden_size, self.reg_len)
+        regulate_rep = self.regulate_enc(regulate.float(), subject_id)[0]
 
-        joint_rep = torch.cat((watch_rep, regulate_rep), dim=-1)
+        res = []
+        for t in range(regulate.shape[-1]):
+            joint_rep = torch.cat((watch_rep[..., t], regulate_rep[..., t]), dim=-1)
+            out_t = self.fc(joint_rep)
+            res.append(out_t)
 
-        out = self.fc(joint_rep)
+        out = torch.stack(res, dim=-1)
         return out
 

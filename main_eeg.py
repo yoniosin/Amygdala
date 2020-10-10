@@ -39,12 +39,12 @@ def load_data_set(db_wrapper_list: Iterable[DBWrapper], cfg):
         return torch.load(ds_location / 'train.pt'), torch.load(ds_location / 'test.pt'), torch.load(
             ds_location / 'input_shape.pt')
 
-    ds = EEGDataSet([db.data_path for db in db_wrapper_list], cfg)
+    ds = EEGDataSet([db.data_path for db in db_wrapper_list], cfg.learner)
     train_ds, test_ds = ds.train_test_split()
 
-    train_dl_ = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True)
+    train_dl_ = DataLoader(train_ds, batch_size=cfg.learner.batch_size, shuffle=True)
     torch.save(train_dl_, '../../../data/eeg/train.pt')
-    test_dl_ = DataLoader(test_ds, batch_size=cfg.batch_size, shuffle=True)
+    test_dl_ = DataLoader(test_ds, batch_size=cfg.learner.batch_size, shuffle=True)
     torch.save(test_dl_, '../../../data/eeg/test.pt')
     # torch.save(ds.get_sample_shape(), 'data/input_shape.pt')
     return train_dl_, test_dl_, ds.get_sample_shape()
@@ -77,7 +77,6 @@ def load_data_set(db_wrapper_list: Iterable[DBWrapper], cfg):
 
 
 def prepare_run():
-
     # if args.create_mapping:
     #     create_mapping([Path('../Amygdala/data/3D'), Path('data/PTSD'), Path('data/Fibro')])
 
@@ -97,22 +96,26 @@ def upload_db(cfg, runs_path):
 
 @hydra.main(config_name='eeg')
 def main(cfg: EEGLearnerConfig):
-    runs_dir = Path(cfg.runs_dir)
+    runs_dir = Path(cfg.learner.runs_dir)
     run_num_path = runs_dir/'eeg/last_run.json'
     run_num = json.load(open(str(run_num_path), 'r'))['last'] + 1
-    cfg.run_num = run_num
+    cfg.learner.run_num = run_num
     update_cfg(cfg)
 
     data_loaders = upload_db(cfg, runs_dir)
 
-    model = Prd.EEGModel(**data_loaders, **cfg.net, run_num=run_num, logger_path=cfg.logger_path)
-    model.train(cfg.max_epochs)
+    model = Prd.EEGModel(
+        **data_loaders,
+        **cfg.net,
+        run_num=run_num,
+        logger_path=cfg.learner.logger_path)
+    model.train(cfg.learner.max_epochs)
     json.dump({"last": run_num}, open(str(run_num_path), 'w'))
 
 
 def update_cfg(cfg: EEGLearnerConfig):
-    assert 0 < cfg.train_ratio <= 1
-    cfg.logger_path = f'{cfg.runs_dir}/eeg/run#{cfg.run_num}'
+    assert 0 < cfg.learner.train_ratio <= 1
+    cfg.learner.logger_path = f'{cfg.learner.runs_dir}/eeg/run#{cfg.learner.run_num}'
 
 
 if __name__ == '__main__':

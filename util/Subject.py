@@ -198,7 +198,8 @@ class EEGSubjectPTSD:
     def get_data(self):
         chosen_window = self.paired_windows[randint(0, len(self.paired_windows) - 1)]
         return {'watch': chosen_window.watch_window.get_data(), 'regulate': chosen_window.regulate_window.get_data(),
-                'medical_idx': self.medical_idx}
+                'medical_idx': self.medical_idx,
+                'system_idx': self.system_idx}
 
 
 if __name__ == '__main__':

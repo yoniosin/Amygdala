@@ -17,13 +17,13 @@ from collections import Counter
 
 class BaseModel(ABC):
     """ Wrapper which defines high-level training procedure and data saving """
-    def __init__(self, train_dl, test_dl, run_name, run_logger_path, **net_params):
+    def __init__(self, train_dl, test_dl, run_name, run_logger_path, lr, **net_params):
         self.run_logger_path = run_logger_path
         self.run_name = run_name
         self.train_dl = train_dl
         self.test_dl = test_dl
         self.net = self.build_NN(**net_params)
-        self.optimizer = optim.Adam(self.net.parameters(), lr=5e-4, weight_decay=0)
+        self.optimizer = optim.Adam(self.net.parameters(), lr, weight_decay=0)
 
     @abstractmethod
     def build_NN(self, **kwargs): pass
@@ -44,7 +44,7 @@ class BaseModel(ABC):
             self.update_logger(writer, train_stats, test_stats, epoch)
 
         writer.close()
-        torch.save(self.net, f'trained models/{self.run_name}.pt')
+        # torch.save(self.net, f'trained models/{self.run_name}.pt')
 
     def test(self):
         with torch.no_grad():
@@ -306,8 +306,9 @@ class EEGModel(BaseModel):
 
     def calc_signals(self, batch, train):
         watch = Variable(batch['watch'].squeeze(), requires_grad=train)
-        regulate = Variable(batch['regulate'].float(), requires_grad=False)
-        output = self.net(watch, regulate)
+        regulate = Variable(batch['regulate'].permute(0, 2, 1).float(), requires_grad=False)
+        subject_id = batch['system_idx']
+        output = self.net(watch, regulate, subject_id)
 
         return regulate, output
 
@@ -316,4 +317,3 @@ class EEGModel(BaseModel):
 
     def build_NN(self, **kwargs):
         return Net.EEGNetwork(**kwargs)
-

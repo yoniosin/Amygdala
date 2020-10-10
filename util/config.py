@@ -42,11 +42,11 @@ class ROIData:
 @dataclass
 class LearnerConfig:
     run_num: int = MISSING
-    max_epochs: int = 1000
-    batch_size: int = 2
+    lr: float = 5e-1
+    max_epochs: int = 500
+    batch_size: int = 10
     train_ratio: float = 0.8
     train_windows: int = 2
-    total_subject: int = MISSING
     logger_path: str = MISSING
     runs_dir: str = 'C:/Users/yonio/PycharmProjects/Amygdala_new/runs'
 
@@ -78,10 +78,12 @@ class fMRILearnerConfig(LearnerConfig):
 
 @dataclass
 class EEGNetConfig:
-    watch_hidden_size: int = 15
-    reg_hidden_size: int = 16
+    watch_hidden_size: int = 5
+    reg_hidden_size: list = field(default_factory=lambda: [10])
     watch_len: int = 20
     reg_len: int = 60
+    lr: float = 1e-4
+    n_subjects: int = 164
 
 
 
@@ -96,7 +98,8 @@ class EEGData:
 
 
 @dataclass
-class EEGLearnerConfig(LearnerConfig):
+class EEGLearnerConfig:
+    learner: LearnerConfig = LearnerConfig()
     net: EEGNetConfig = EEGNetConfig()
     data: EEGData = EEGData()
 
