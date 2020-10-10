@@ -129,7 +129,7 @@ def load_data_set(data_location: List[Path]):
 
 if __name__ == '__main__':
     # fibro_md = FibroSubjectMetaData('Fibro/Clinical.csv', '../split.json')
-    ptsd_md = PTSDSubjectMetaData('PTSD/Clinical.csv', '../split.json')
+    ptsd_md = PTSDSubjectMetaData('PTSD/Clinical.csv', '../runs/split.json')
 
     load = True
     train_dl, test_dl = load_data_set([

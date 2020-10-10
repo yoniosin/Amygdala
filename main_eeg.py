@@ -18,9 +18,9 @@ class DBWrapper:
     db_type: str
     data_path: Path
     meta_data_path: str
-    split_path: str = '../../../split.json'
+    split_path: str = 'split.json'
 
-    def generate_meta_data(self):
+    def generate_meta_data(self, runs_dir: Path):
         if self.db_type == 'healthy':
             meta_data_type = HealthySubjectMetaData
         elif self.db_type == 'PTSD':
@@ -30,7 +30,7 @@ class DBWrapper:
         else:
             raise ValueError(f'Illegal value for Meta data type: {self.db_type}')
 
-        self.meta_data = meta_data_type(self.meta_data_path, self.split_path)
+        self.meta_data = meta_data_type(runs_dir/self.meta_data_path, runs_dir/self.split_path)
 
 
 def load_data_set(db_wrapper_list: Iterable[DBWrapper], cfg):
@@ -87,26 +87,27 @@ def prepare_run():
                             )
 
 
-def upload_db(cfg):
+def upload_db(cfg, runs_path):
     db_list_ = [DBWrapper(db_type, *cfg.data.paths[db_type]) for db_type in cfg.data.db_type]
     train_dl_, test_dl_, input_shape_ = load_data_set(db_list_, cfg)
     # for db in db_list_:
-    #     db.generate_meta_data()
+    #     db.generate_meta_data(runs_path)
     return {'train_dl': train_dl_, 'test_dl': test_dl_}
 
 
 @hydra.main(config_name='eeg')
 def main(cfg: EEGLearnerConfig):
-    run_path = Path('C:/Users/yonio/PycharmProjects/Amygdala_new/runs/eeg/last_run.json')
-    run_num = json.load(open(str(run_path), 'r'))['last'] + 1
+    runs_dir = Path(cfg.runs_dir)
+    run_num_path = runs_dir/'eeg/last_run.json'
+    run_num = json.load(open(str(run_num_path), 'r'))['last'] + 1
     cfg.run_num = run_num
     update_cfg(cfg)
 
-    data_loaders = upload_db(cfg)
+    data_loaders = upload_db(cfg, runs_dir)
 
     model = Prd.EEGModel(**data_loaders, **cfg.net, run_num=run_num, logger_path=cfg.logger_path)
     model.train(cfg.max_epochs)
-    json.dump({"last": run_num}, open(str(run_path), 'w'))
+    json.dump({"last": run_num}, open(str(run_num_path), 'w'))
 
 
 def update_cfg(cfg: EEGLearnerConfig):

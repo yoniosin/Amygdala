@@ -48,7 +48,7 @@ class LearnerConfig:
     train_windows: int = 2
     total_subject: int = MISSING
     logger_path: str = MISSING
-    runs_dir: str = 'runs'
+    runs_dir: str = 'C:/Users/yonio/PycharmProjects/Amygdala_new/runs'
 
     def validate_config(self):
         assert 0 < self.train_ratio < 1

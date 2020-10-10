@@ -21,7 +21,7 @@ class DBWrapper:
     db_type: str
     data_path: Path
     meta_data_path: str
-    split_path: str = 'split.json'
+    split_path: str = 'runs/split.json'
 
     def generate_meta_data(self):
         if self.db_type == 'healthy':
