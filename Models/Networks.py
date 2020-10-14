@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-from Models.EmbeddingLSTM import EmbeddingLSTM, EEGEmbedingLSTM
+from Models.EmbeddingLSTM import EmbeddingLSTM, EEGEmbedingLSTM, EEGLSTM
 from itertools import chain
 
 
@@ -138,27 +138,36 @@ class CNNBaseline(nn.Module):
 
 
 class EEGNetwork(nn.Module):
-    def __init__(self, watch_len, reg_len, watch_hidden_size, reg_hidden_size, n_subjects=None):
+    SEQ_LEN_DIM = -1
+
+    def __init__(self, watch_len, reg_len, watch_hidden_size, reg_hidden_size, embedding_size, n_subjects=None):
         super().__init__()
         self.reg_len = reg_len
         self.watch_hidden_size = watch_hidden_size
 
-        self.watch_enc = torch.nn.Linear(watch_len, watch_hidden_size * reg_len).float()
-        self.regulate_enc = EEGEmbedingLSTM(reg_hidden_size, n_subjects).float()
-        # self.regulate_enc = torch.nn.LSTM(1, reg_hidden_size, batch_first=True).float()
-        self.fc = torch.nn.Linear(watch_hidden_size + reg_hidden_size[-1], 1).float()
+        self.watch_enc = torch.nn.Linear(watch_len, reg_len * watch_hidden_size).float()
+        self.embedding_size = embedding_size
+        if embedding_size > 0:
+            self.regulate_enc = EEGEmbedingLSTM(reg_hidden_size, embedding_size, n_subjects).float()
+        else:
+            self.regulate_enc = EEGLSTM(reg_hidden_size).float()
+        self.fc = torch.nn.Linear(watch_hidden_size + reg_hidden_size, 1).float()
 
     def forward(self, watch, regulate, subject_id):
-        watch_rep = self.watch_enc(watch.float())
-        watch_rep = watch_rep.reshape(-1, self.watch_hidden_size, self.reg_len)
-        regulate_rep = self.regulate_enc(regulate.float(), subject_id)[0]
+        reg_len, batch_size, seq_len = regulate.shape
+        watch_rep = self.watch_enc(watch.float()).view((reg_len, batch_size, -1))
+
+        if self.embedding_size > 0:
+            regulate_rep, _ = self.regulate_enc(regulate.float(), subject_id)
+        else:
+            regulate_rep, _ = self.regulate_enc(regulate.float())
 
         res = []
-        for t in range(regulate.shape[-1]):
-            joint_rep = torch.cat((watch_rep[..., t], regulate_rep[..., t]), dim=-1)
+        for t in range(self.reg_len):
+            joint_rep = torch.cat((watch_rep[t], regulate_rep[t]), dim=-1)
             out_t = self.fc(joint_rep)
             res.append(out_t)
 
-        out = torch.stack(res, dim=-1)
+        out = torch.stack(res, dim=0)
         return out
 

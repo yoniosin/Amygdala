@@ -43,12 +43,13 @@ class ROIData:
 class LearnerConfig:
     run_num: int = MISSING
     lr: float = 5e-1
-    max_epochs: int = 500
+    max_epochs: int = 1000
     batch_size: int = 10
     train_ratio: float = 0.8
     train_windows: int = 2
     logger_path: str = MISSING
     runs_dir: str = 'C:/Users/yonio/PycharmProjects/Amygdala_new/runs'
+    main_dir: str = 'C:/Users/yonio/PycharmProjects/Amygdala_new'
 
     def validate_config(self):
         assert 0 < self.train_ratio < 1
@@ -79,18 +80,18 @@ class fMRILearnerConfig(LearnerConfig):
 @dataclass
 class EEGNetConfig:
     watch_hidden_size: int = 5
-    reg_hidden_size: list = field(default_factory=lambda: [10])
+    reg_hidden_size: int = 10
+    embedding_size: int = 0
     watch_len: int = 20
     reg_len: int = 60
     lr: float = 1e-4
     n_subjects: int = 164
 
 
-
 @dataclass
 class EEGData:
     db_type: list = field(default_factory=lambda: ['PTSD'])
-    load: bool = False
+    load: bool = True
     paths: dict = field(
         default_factory=lambda: {'healthy': ('../Amygdala/data/3D', '../Amygdala/MetaData/fDemog.csv'),
                                  'PTSD': ('../../../data/eeg/processed/PTSD', 'MetaData/PTSD/Clinical.csv'),
@@ -102,6 +103,7 @@ class EEGLearnerConfig:
     learner: LearnerConfig = LearnerConfig()
     net: EEGNetConfig = EEGNetConfig()
     data: EEGData = EEGData()
+
 
 @dataclass
 class SubjectMetaData:

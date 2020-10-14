@@ -13,6 +13,7 @@ from functools import reduce
 from more_itertools import first_true
 from Models.Networks import StatisticalLinearBaseLine
 from collections import Counter
+import neptune
 
 
 class BaseModel(ABC):
@@ -29,9 +30,11 @@ class BaseModel(ABC):
     def build_NN(self, **kwargs): pass
 
     def update_logger(self, writer, train_stats, test_stats, epoch):
-        writer.add_scalar('train_loss', np.mean(train_stats), epoch)
+        neptune.log_metric('train_loss', np.mean(train_stats))
+        # writer.add_scalar('train_loss', np.mean(train_stats), epoch)
         print(f'epoch# {epoch}, train error = {np.mean(train_stats)}')
-        writer.add_scalar('test_loss', np.mean(test_stats), epoch)
+        neptune.log_metric('test_loss', np.mean(test_stats))
+        # writer.add_scalar('test_loss', np.mean(test_stats), epoch)
         print(f'epoch# {epoch}, test error = {np.mean(test_stats)}')
 
     def train(self, n_epochs):
@@ -44,7 +47,8 @@ class BaseModel(ABC):
             self.update_logger(writer, train_stats, test_stats, epoch)
 
         writer.close()
-        # torch.save(self.net, f'trained models/{self.run_name}.pt')
+        torch.save(self.net, f'trained models_{self.run_name}.pt')
+        neptune.log_artifact(f'trained models_{self.run_name}.pt')
 
     def test(self):
         with torch.no_grad():
@@ -306,7 +310,7 @@ class EEGModel(BaseModel):
 
     def calc_signals(self, batch, train):
         watch = Variable(batch['watch'].squeeze(), requires_grad=train)
-        regulate = Variable(batch['regulate'].permute(0, 2, 1).float(), requires_grad=False)
+        regulate = Variable(batch['regulate'].float().permute(1, 0, 2), requires_grad=False)
         subject_id = batch['system_idx']
         output = self.net(watch, regulate, subject_id)
 
