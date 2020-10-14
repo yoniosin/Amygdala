@@ -18,13 +18,13 @@ import neptune
 
 class BaseModel(ABC):
     """ Wrapper which defines high-level training procedure and data saving """
-    def __init__(self, train_dl, test_dl, run_name, run_logger_path, lr, **net_params):
+    def __init__(self, train_dl, test_dl, run_name, run_logger_path, lr, weight_decay, **net_params):
         self.run_logger_path = run_logger_path
         self.run_name = run_name
         self.train_dl = train_dl
         self.test_dl = test_dl
         self.net = self.build_NN(**net_params)
-        self.optimizer = optim.Adam(self.net.parameters(), lr, weight_decay=0)
+        self.optimizer = optim.Adam(self.net.parameters(), lr, weight_decay=weight_decay)
 
     @abstractmethod
     def build_NN(self, **kwargs): pass

@@ -85,6 +85,7 @@ class EEGNetConfig:
     watch_len: int = 20
     reg_len: int = 60
     lr: float = 1e-4
+    weight_decay: float = 5e-2
     n_subjects: int = 164
 
 
