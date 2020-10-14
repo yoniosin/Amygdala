@@ -295,23 +295,3 @@ class EmbeddingClassifierBaseline(EmbeddingClassifier):
 
     @property
     def run_type(self): return 'baseline_'
-
-
-class EEGModel(BaseModel):
-    def __init__(self, train_dl, test_dl, run_num, **net_params):
-        super().__init__(train_dl, test_dl, run_name=f'eeg_{run_num}',
-                         **net_params)
-
-    def calc_signals(self, batch, train):
-        watch = Variable(batch['watch'].squeeze(), requires_grad=train)
-        regulate = Variable(batch['regulate'].float().permute(1, 0, 2), requires_grad=False)
-        subject_id = batch['system_idx']
-        output = self.net(watch, regulate, subject_id)
-
-        return regulate, output
-
-    def loss_func(self):
-        return nn.MSELoss()
-
-    def build_NN(self, **kwargs):
-        return Net.EEGNetwork(**kwargs)

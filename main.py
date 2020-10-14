@@ -15,7 +15,6 @@ from dataclasses import dataclass
 import Models.Predictors as Prd
 
 
-
 @dataclass
 class DBWrapper:
     db_type: str
