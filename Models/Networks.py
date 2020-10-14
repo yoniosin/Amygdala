@@ -138,8 +138,6 @@ class CNNBaseline(nn.Module):
 
 
 class EEGNetwork(nn.Module):
-    SEQ_LEN_DIM = -1
-
     def __init__(self, watch_len, reg_len, watch_hidden_size, reg_hidden_size, embedding_size, n_subjects=None):
         super().__init__()
         self.reg_len = reg_len
@@ -147,27 +145,17 @@ class EEGNetwork(nn.Module):
 
         self.watch_enc = torch.nn.Linear(watch_len, reg_len * watch_hidden_size).float()
         self.embedding_size = embedding_size
-        if embedding_size > 0:
-            self.regulate_enc = EEGEmbedingLSTM(reg_hidden_size, embedding_size, n_subjects).float()
-        else:
-            self.regulate_enc = EEGLSTM(reg_hidden_size).float()
+        self.regulate_enc = EEGEmbedingLSTM(reg_hidden_size, embedding_size, n_subjects).float()
         self.fc = torch.nn.Linear(watch_hidden_size + reg_hidden_size, 1).float()
 
     def forward(self, watch, regulate, subject_id):
-        reg_len, batch_size, seq_len = regulate.shape
+        reg_len, batch_size, _ = regulate.shape
         watch_rep = self.watch_enc(watch.float()).view((reg_len, batch_size, -1))
 
-        if self.embedding_size > 0:
-            regulate_rep, _ = self.regulate_enc(regulate.float(), subject_id)
-        else:
-            regulate_rep, _ = self.regulate_enc(regulate.float())
+        regulate_rep, _ = self.regulate_enc(regulate.float(), subject_id)
 
-        res = []
-        for t in range(self.reg_len):
-            joint_rep = torch.cat((watch_rep[t], regulate_rep[t]), dim=-1)
-            out_t = self.fc(joint_rep)
-            res.append(out_t)
+        joint_rep = torch.cat((watch_rep, regulate_rep), dim=-1).view(batch_size*reg_len, -1)
+        out = self.fc(joint_rep)
 
-        out = torch.stack(res, dim=0)
-        return out
+        return out.view(reg_len, batch_size, -1)
 

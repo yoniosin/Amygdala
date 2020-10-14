@@ -109,7 +109,6 @@ def main(cfg: EEGLearnerConfig):
         **data_loaders,
         **cfg.net,
         run_num=run_num,
-        logger_path=cfg.learner.logger_path
     )
     init_neptune(cfg)
     model.train(cfg.learner.max_epochs)

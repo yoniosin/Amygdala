@@ -2,7 +2,6 @@ from util.config import fMRILearnerConfig
 from torch import nn, optim
 import progressbar
 import torch
-from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
 from abc import abstractmethod, ABC
 from Models import Networks as Net
@@ -18,35 +17,30 @@ import neptune
 
 class BaseModel(ABC):
     """ Wrapper which defines high-level training procedure and data saving """
-    def __init__(self, train_dl, test_dl, run_name, run_logger_path, lr, **net_params):
-        self.run_logger_path = run_logger_path
+    def __init__(self, train_dl, test_dl, run_name, lr, weight_decay, **net_params):
         self.run_name = run_name
         self.train_dl = train_dl
         self.test_dl = test_dl
         self.net = self.build_NN(**net_params)
-        self.optimizer = optim.Adam(self.net.parameters(), lr, weight_decay=0)
+        self.optimizer = optim.Adam(self.net.parameters(), lr, weight_decay=weight_decay)
 
     @abstractmethod
     def build_NN(self, **kwargs): pass
 
-    def update_logger(self, writer, train_stats, test_stats, epoch):
+    def update_logger(self, train_stats, test_stats, epoch):
         neptune.log_metric('train_loss', np.mean(train_stats))
-        # writer.add_scalar('train_loss', np.mean(train_stats), epoch)
         print(f'epoch# {epoch}, train error = {np.mean(train_stats)}')
         neptune.log_metric('test_loss', np.mean(test_stats))
-        # writer.add_scalar('test_loss', np.mean(test_stats), epoch)
         print(f'epoch# {epoch}, test error = {np.mean(test_stats)}')
 
     def train(self, n_epochs):
         bar = progressbar.ProgressBar()
-        writer = SummaryWriter(self.run_logger_path)
         for epoch in bar(range(n_epochs)):
             train_stats = self.run_model(train=True)
             test_stats = self.test()
 
-            self.update_logger(writer, train_stats, test_stats, epoch)
+            self.update_logger(train_stats, test_stats, epoch)
 
-        writer.close()
         torch.save(self.net, f'trained models_{self.run_name}.pt')
         neptune.log_artifact(f'trained models_{self.run_name}.pt')
 
@@ -304,9 +298,9 @@ class EmbeddingClassifierBaseline(EmbeddingClassifier):
 
 
 class EEGModel(BaseModel):
-    def __init__(self, train_dl, test_dl, run_num, logger_path, **net_params):
+    def __init__(self, train_dl, test_dl, run_num, **net_params):
         super().__init__(train_dl, test_dl, run_name=f'eeg_{run_num}',
-                         run_logger_path=logger_path, **net_params)
+                         **net_params)
 
     def calc_signals(self, batch, train):
         watch = Variable(batch['watch'].squeeze(), requires_grad=train)

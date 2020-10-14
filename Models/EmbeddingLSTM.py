@@ -112,29 +112,30 @@ class ConcatEmbeddingLSTMCell(EmbeddingLSTMCell):
         return torch.cat((x, embed, h_prev), dim=1)
 
 
-class EEGEmbedingLSTM(EmbeddingLSTM):
-    def __init__(self, hidden_size, embedding_size=0, n_subjects=None, num_layers=1):
-        super().__init__(1, hidden_size, n_subjects, embedding_size, num_layers)
+class EEGEmbedingLSTM(nn.Module):
+    def __init__(self, hidden_size, embedding_size=0, n_subjects=None):
+        super().__init__()
 
-    def forward(self, x, subject_id=None, y=None):
-        batch_size = x.shape[1]
-        sequence_len = x.shape[0]
-        cells_output = []
-        for cell in self.cells:
-            h = cell.zero_h(batch_size)
-            embedding_vec = self.get_embeddings(subject_id)
-            # cell state is random unless init mode is activated
-            c = embedding_vec.clone().detach() if self.embedding_layer == 'init' else h.clone().detach()
+        self.n_subjects = n_subjects
+        if embedding_size > 0:
+            assert n_subjects > 0, "embedding size must be greater than 0 if n_subjects is provided"
+            self.embedding_lut = nn.Embedding(n_subjects, embedding_size)
+            # self.embedding_lut.weight.requires_grad = False
+            self.arrange_inputs = self.concat_embeddings
+        else:
+            self.arrange_inputs = lambda x, s_id: x
 
-            inner_cell_out = []
-            for t in range(sequence_len):
-                x_i = x[t - 1] if t > 0 else torch.zeros(x.shape[1:])
-                h, c = cell(x_i, h, c, embedding_vec)
-                inner_cell_out.append(h)
+        self.lstm = nn.LSTM(input_size=embedding_size + 1, hidden_size=hidden_size)
 
-            cells_output.append(torch.stack(inner_cell_out, dim=0))
+    def forward(self, x, subject_id=None):
+        lstm_input = self.arrange_inputs(x, subject_id)
+        out = self.lstm(lstm_input)
+        return out
 
-        return cells_output[-1], c
+    def concat_embeddings(self, x, subject_id):
+        seq_len, _, _ = x.shape
+        embeddings = self.embedding_lut(subject_id).unsqueeze(0).expand(seq_len, -1, -1)
+        return torch.cat((x, embeddings), dim=-1)
 
 
 class EEGLSTM(nn.LSTM):

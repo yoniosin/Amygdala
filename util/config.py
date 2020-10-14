@@ -42,7 +42,6 @@ class ROIData:
 @dataclass
 class LearnerConfig:
     run_num: int = MISSING
-    lr: float = 5e-1
     max_epochs: int = 1000
     batch_size: int = 10
     train_ratio: float = 0.8
@@ -79,12 +78,13 @@ class fMRILearnerConfig(LearnerConfig):
 
 @dataclass
 class EEGNetConfig:
-    watch_hidden_size: int = 5
+    watch_hidden_size: int = 10
     reg_hidden_size: int = 10
-    embedding_size: int = 0
+    embedding_size: int = 5
     watch_len: int = 20
     reg_len: int = 60
-    lr: float = 1e-4
+    lr: float = 1e-2
+    weight_decay: float = 0
     n_subjects: int = 164
 
 
