@@ -2,6 +2,7 @@ from torch import nn
 import torch
 from Models.EmbeddingLSTM import EmbeddingLSTM, EEGEmbedingLSTM, EEGLSTM
 from itertools import chain
+import pytorch_lightning as pl
 
 
 class SequenceTransformNet(nn.Module):
@@ -137,8 +138,16 @@ class CNNBaseline(nn.Module):
         return self.mlp(z)
 
 
-class EEGNetwork(nn.Module):
-    def __init__(self, watch_len, reg_len, watch_hidden_size, reg_hidden_size, embedding_size, n_subjects=None):
+class EEGNetwork(pl.LightningModule):
+    def __init__(self,
+                 watch_len,
+                 reg_len,
+                 watch_hidden_size,
+                 reg_hidden_size,
+                 embedding_size,
+                 lr,
+                 weight_decay=0,
+                 n_subjects=None):
         super().__init__()
         self.reg_len = reg_len
         self.watch_hidden_size = watch_hidden_size
@@ -147,15 +156,35 @@ class EEGNetwork(nn.Module):
         self.embedding_size = embedding_size
         self.regulate_enc = EEGEmbedingLSTM(reg_hidden_size, embedding_size, n_subjects).float()
         self.fc = torch.nn.Linear(watch_hidden_size + reg_hidden_size, 1).float()
+        self.loss_fn = nn.MSELoss()
+        self.lr = lr
+        self.weight_decay = weight_decay
 
-    def forward(self, watch, regulate, subject_id):
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+    def forward(self, batch):
+        watch = batch['watch'].squeeze()
+        regulate = batch['regulate'].float().permute(1, 0, 2)
+        subject_id = batch['system_idx']
+
         reg_len, batch_size, _ = regulate.shape
         watch_rep = self.watch_enc(watch.float()).view((reg_len, batch_size, -1))
 
         regulate_rep, _ = self.regulate_enc(regulate.float(), subject_id)
 
         joint_rep = torch.cat((watch_rep, regulate_rep), dim=-1).view(batch_size*reg_len, -1)
-        out = self.fc(joint_rep)
+        out = self.fc(joint_rep).view(reg_len, batch_size, -1)
+        loss = self.loss_fn(out, regulate)
 
-        return out.view(reg_len, batch_size, -1)
+        return loss
 
+    def training_step(self, batch, batch_idx):
+        loss = self(batch)
+
+        self.log('train_loss', loss)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self(batch)
+        self.log('val_loss', loss)

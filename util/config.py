@@ -1,34 +1,22 @@
 from dataclasses import dataclass, asdict, field
 from typing import List
-import json
-import numpy as np
-from oct2py import Oct2Py
-from pathlib import Path
-from omegaconf import MISSING
 
 
-def load_mat(path):
-    oc = Oct2Py()
-    ans = oc.convert_img(path)
-    oc.exit()
-    return ans
-
-
-def get_roi_md(dict_path=Path('../PreProcess/voxels_dict.txt'), raw_roi_path='../raw_data/ROI.mat'):
-    if dict_path.exists():
-        return ROIData(**json.load(open(str(dict_path), 'r')))
-
-    roi = np.where(load_mat(str(raw_roi_path)))
-    amyg_vox = [(int(vox[0]), int(vox[1]), int(vox[2])) for vox in zip(*roi)]
-    min_h, min_w, min_d = list(map(min, roi))
-    max_h, max_w, max_d = list(map(max, roi))
-    h_range = list(range(min_h, max_h + 1))
-    w_range = list(range(min_w, max_w + 1))
-    d_range = list(range(min_d, max_d + 1))
-
-    roi_dict = ROIData(amyg_vox, h_range, w_range, d_range)
-    json.dump(asdict(roi_dict), open(str(dict_path), 'w'))
-    return roi_dict
+# def get_roi_md(dict_path=Path('../PreProcess/voxels_dict.txt'), raw_roi_path='../raw_data/ROI.mat'):
+#     if dict_path.exists():
+#         return ROIData(**json.load(open(str(dict_path), 'r')))
+#
+#     roi = np.where(load_mat(str(raw_roi_path)))
+#     amyg_vox = [(int(vox[0]), int(vox[1]), int(vox[2])) for vox in zip(*roi)]
+#     min_h, min_w, min_d = list(map(min, roi))
+#     max_h, max_w, max_d = list(map(max, roi))
+#     h_range = list(range(min_h, max_h + 1))
+#     w_range = list(range(min_w, max_w + 1))
+#     d_range = list(range(min_d, max_d + 1))
+#
+#     roi_dict = ROIData(amyg_vox, h_range, w_range, d_range)
+#     json.dump(asdict(roi_dict), open(str(dict_path), 'w'))
+#     return roi_dict
 
 
 @dataclass
@@ -41,12 +29,10 @@ class ROIData:
 
 @dataclass
 class LearnerConfig:
-    run_num: int = MISSING
     max_epochs: int = 1000
     batch_size: int = 10
     train_ratio: float = 0.8
     train_windows: int = 2
-    logger_path: str = MISSING
     runs_dir: str = 'C:/Users/yonio/PycharmProjects/Amygdala_new/runs'
     main_dir: str = 'C:/Users/yonio/PycharmProjects/Amygdala_new'
 
@@ -121,7 +107,3 @@ class SubjectMetaData:
         self.min_w = min(self.watch_duration + self.regulate_duration) - self.initial_delay
         self.watch_times = map(self.gen_time_range, self.watch_on, self.watch_duration)
         self.regulate_times = map(self.gen_time_range, self.regulate_on, self.regulate_duration)
-
-
-if __name__ == '__main__':
-    get_roi_md(Path(r'rawData/voxels_dict.json'), Path(r'raw_data/rrAmygd_ptsd.nii'))
