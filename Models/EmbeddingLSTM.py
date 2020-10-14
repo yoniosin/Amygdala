@@ -9,29 +9,31 @@ class EmbeddingLSTM(nn.Module):
         2) init- cell state are initiated with the embeddings
         3) concat- embeddings are concatenated to the input
      """
-    def __init__(self, spacial_size, hidden_size, n_subjects, use_embeddings='none', num_layers=1):
+    def __init__(self, spacial_size, hidden_size, n_subjects=None, embedding_size=0, num_layers=1):
         super().__init__()
+
         self.spacial_size = spacial_size
         self.hidden_size = hidden_size
-        self.use_embeddings = use_embeddings
-        cell_type = EmbeddingLSTMCell if use_embeddings != 'concat' else ConcatEmbeddingLSTMCell
+        self.embedding_size = embedding_size
+        self.embedding_layer = nn.Embedding(n_subjects, embedding_size) if embedding_size > 0 else None
+        # cell_type = EmbeddingLSTMCell if embedding_size != 'concat' else ConcatEmbeddingLSTMCell
+        cell_type = ConcatEmbeddingLSTMCell
 
-        self.initilaizer = nn.Linear(n_subjects, self.hidden_size[0])
-        self.cells = nn.ModuleList([cell_type(hidden_size=self.hidden_size[i],
+        self.cells = nn.ModuleList([cell_type(hidden_size=self.hidden_size,
+                                              embedding_size=embedding_size,
                                               input_size=self.spacial_size if i == 0 else self.hidden_channels[i - 1],
-                                              embedding_fc=self.initilaizer)
+                                              )
                                     for i in range(num_layers)])
 
     def forward(self, x, subject_id, y):
-        in_shape = x.shape
-        batch_size = in_shape[0]
-        sequence_len = in_shape[-1]
+        batch_size = x.shape[0]
+        sequence_len = x.shape[-1]
         cells_output = []
         for cell in self.cells:
             h = cell.zero_h(batch_size)
-            embedding_vec = cell.get_embeddings(subject_id)
+            embedding_vec = self.get_embeddings(subject_id)
             # cell state is random unless init mode is activated
-            c = embedding_vec.clone().detach() if self.use_embeddings == 'init' else h.clone().detach()
+            c = embedding_vec.clone().detach() if self.embedding_layer == 'init' else h.clone().detach()
 
             inner_cell_out = []
             for t in range(sequence_len):
@@ -46,28 +48,30 @@ class EmbeddingLSTM(nn.Module):
 
         return cells_output[-1], c
 
+    def get_embeddings(self, subject_id):
+        return self.embedding_layer(subject_id) if self.embedding_layer else None
+
 
 class EmbeddingLSTMCell(nn.Module):
     """Vanilla LSTM cell"""
-    def __init__(self, input_size, hidden_size, embedding_fc):
+    def __init__(self, input_size, hidden_size, embedding_size=0):
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.embedding_fc = embedding_fc
+        self.embedding_size = embedding_size
 
         self.gates = nn.ModuleDict({g_name: self.gen_gate() for g_name in ('forget', 'input', '_update', 'out')})
         self.sigmoid = nn.Sigmoid()
         self.tanh = nn.Tanh()
 
     def zero_h(self, batch_size): return torch.zeros(batch_size, self.hidden_size).float()
-    def get_embeddings(self, subject_id): return self.embedding_fc(subject_id)
 
     def gen_gate(self):
         """Creates a gate with shape [input + hidden, hidden]"""
-        return nn.Linear(self.input_size + self.hidden_size, self.hidden_size)
+        return nn.Linear(self.input_size + self.hidden_size + self.embedding_size, self.hidden_size)
 
     @staticmethod
-    def rearrange_inputs(x, h_prev, embed):
+    def rearrange_inputs(x, h_prev, _):
         """Concatenates input to hidden state to form a single matrix that can be passed through the cell's gates
         (Note: In the vanilla version, embedding vector is ignored)
         """
@@ -98,9 +102,6 @@ class EmbeddingLSTMCell(nn.Module):
 
 class ConcatEmbeddingLSTMCell(EmbeddingLSTMCell):
     """Unlike vanilla LSTM cell, this cell supports concatenation of an embedding vector"""
-    def gen_gate(self):
-        """Creates a gate which supports the concatenation of the embedding vector to input and hidden state"""
-        return nn.Linear(self.input_size + 2 * self.hidden_size, self.hidden_size)
 
     @staticmethod
     def rearrange_inputs(x, h_prev, embed):
@@ -108,6 +109,35 @@ class ConcatEmbeddingLSTMCell(EmbeddingLSTMCell):
         Concatenates input, hidden state and embedding vector to form a single matrix
         that can be passed through the cell's gates
         """
-        return torch.cat((x.view(x.shape[0], -1), embed, h_prev), dim=1)
+        return torch.cat((x, embed, h_prev), dim=1)
 
 
+class EEGEmbedingLSTM(nn.Module):
+    def __init__(self, hidden_size, embedding_size=0, n_subjects=None):
+        super().__init__()
+
+        self.n_subjects = n_subjects
+        if embedding_size > 0:
+            assert n_subjects > 0, "embedding size must be greater than 0 if n_subjects is provided"
+            self.embedding_lut = nn.Embedding(n_subjects, embedding_size)
+            # self.embedding_lut.weight.requires_grad = False
+            self.arrange_inputs = self.concat_embeddings
+        else:
+            self.arrange_inputs = lambda x, s_id: x
+
+        self.lstm = nn.LSTM(input_size=embedding_size + 1, hidden_size=hidden_size)
+
+    def forward(self, x, subject_id=None):
+        lstm_input = self.arrange_inputs(x, subject_id)
+        out = self.lstm(lstm_input)
+        return out
+
+    def concat_embeddings(self, x, subject_id):
+        seq_len, _, _ = x.shape
+        embeddings = self.embedding_lut(subject_id).unsqueeze(0).expand(seq_len, -1, -1)
+        return torch.cat((x, embeddings), dim=-1)
+
+
+class EEGLSTM(nn.LSTM):
+    def __init__(self, hidden_size, *args, **kwargs):
+        super().__init__(1, hidden_size, *args, **kwargs)

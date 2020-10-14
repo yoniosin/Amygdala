@@ -3,6 +3,12 @@ from itertools import chain
 from abc import abstractmethod
 import torch
 import numpy as np
+from scipy.io import loadmat
+import re
+import pickle
+from pathlib import Path
+import json
+from random import randint
 
 
 class Window:
@@ -34,6 +40,7 @@ class FlatWindow(Window):
 
             def __repr__(self):
                 return f"vox {self.vox_coor}"
+
         self.voxels = {vox: Voxel(vox, bold_mat[(*vox), time_slots]) for vox in voxels_md.amyg_vox}
         super().__init__(idx, time_slots, window_type, bold_mat)
 
@@ -58,7 +65,6 @@ class Window3D(Window):
 
 class PairedWindows:
     def __init__(self, watch_window, regulate_window):
-
         assert watch_window.idx == regulate_window.idx, f'indices mismatch: {watch_window.idx} != {regulate_window.idx}'
         self.idx = watch_window.idx
         self.watch_window: Window = watch_window
@@ -67,7 +73,7 @@ class PairedWindows:
 
     def calc_score(self):
         mean_diff = self.watch_window.mean - self.regulate_window.mean
-        joint_var = 1 #torch.var(torch.cat((self.watch_window.bold, self.regulate_window.bold), dim=3))
+        joint_var = 1  # torch.var(torch.cat((self.watch_window.bold, self.regulate_window.bold), dim=3))
         self.score = mean_diff / joint_var
         return self.score
 
@@ -116,23 +122,26 @@ class Subject:
         grades_formatted = ("{:.2f}, " * len(grades)).format(*grades)
         return f'{self.type} subject #{self.name}, windows grades=[{grades_formatted}]'
 
-    def get_windows(self, windows_num): return self.paired_windows[:windows_num]
+    def get_windows(self, windows_num):
+        return self.paired_windows[:windows_num]
 
     def __len__(self):
         return len(self.paired_windows)
-    
+
     def get_score(self, last_window):
         return [pw.means for pw in self.paired_windows[:last_window]]
         # return self.paired_windows[0].watch_window.mean, self.paired_windows[0].regulate_window.mean
-    
-    def calc_score(self): 
+
+    def calc_score(self):
         for pw in self.paired_windows:
             pw.calc_score()
 
     @property
-    def type(self): return 'healthy'
+    def type(self):
+        return 'healthy'
 
-    def convert_to_fibro(self): self.__class__ = FibroSubject
+    def convert_to_fibro(self):
+        self.__class__ = FibroSubject
 
 
 class PTSDSubject(Subject):
@@ -143,3 +152,64 @@ class PTSDSubject(Subject):
 class FibroSubject(Subject):
     @property
     def type(self): return 'Fibro'
+
+
+class EEGWindow(Window):
+    def __init__(self, idx, bold_mat, start, length, window_type):
+        super().__init__(idx, list(range(start, start + length)), window_type, bold_mat)
+        self.idx = idx
+
+    @property
+    def mean(self):
+        return np.mean(self.bold)
+
+    def gen_bold_mat(self, bold_mat):
+        return bold_mat[self.time]
+
+    def get_data(self, *args):
+        return self.bold
+
+
+class EEGSubjectPTSD:
+    passive_duration = 20
+    nf_duration = 60
+    total_duration = 80
+    use_clean_data = True
+    data_shape = {'nf': 60, 'passive': 20}
+
+    def __init__(self, data_path, medical_idx, system_idx):
+        self.medical_idx = medical_idx
+        self.system_idx = system_idx
+        self.paired_windows = self.generate_windows(data_path)
+
+    def generate_windows(self, data_path):
+        mat = loadmat(data_path)
+        signal = mat['clean_data'] if self.use_clean_data else mat['data']
+        num_windows = len(signal) // (self.passive_duration + self.nf_duration)
+
+        paired_windows = []
+        for w in range(num_windows):
+            passive = EEGWindow(w, signal, w * self.total_duration, self.passive_duration, 'watch')
+            nf = EEGWindow(w, signal, w * self.total_duration + self.passive_duration, self.nf_duration, 'regulate')
+            paired_windows.append(PairedWindows(passive, nf))
+
+        return paired_windows
+
+    def get_data(self):
+        chosen_window = self.paired_windows[randint(0, len(self.paired_windows) - 1)]
+        return {'watch': chosen_window.watch_window.get_data(), 'regulate': chosen_window.regulate_window.get_data(),
+                'medical_idx': self.medical_idx,
+                'system_idx': self.system_idx}
+
+
+if __name__ == '__main__':
+    data_dir = Path('../data/eeg/raw/PTSD')
+    mapping = json.load(open('../mapping.json', 'r'))
+    for path in data_dir.iterdir():
+        medical_idx = str(int(re.search(r'sub-(\d+)', str(path)).group(1)))
+        if mapping.get(medical_idx):
+            system_idx = mapping[medical_idx]
+            subject = EEGSubjectPTSD(path, medical_idx, system_idx)
+
+            with open(f'../data/eeg/processed/PTSD/sub-{subject.medical_idx}.pkl', 'wb') as file:
+                pickle.dump(subject, file)

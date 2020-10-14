@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 from util.AmygDataSet import AmygDataSet, ScoresAmygDataset
 from torch.utils.data import DataLoader
-from util.config import LearnerMetaData
+from util.config import fMRILearnerConfig
 from typing import List
 from abc import abstractmethod
 
@@ -20,7 +20,7 @@ class SubjectsMetaData:
         self.train_dict, self.test_dict = {}, {}
         self.train_data, self.test_data = None, None
         split = json.load(open(split_path, 'r'))
-        self.invalid = json.load(open('invalid_subjects.json', 'r'))
+        self.invalid = json.load(open('../../../invalid_subjects.json', 'r'))
         self.train_list = split['train']
         self.test_list = split['test']
 
@@ -111,11 +111,11 @@ def load_data_set(data_location: List[Path]):
     if load and Path('test_meta_dl.pt').exists() and Path('train_meta_dl.pt').exists():
         return torch.load('train_meta_dl.pt'), torch.load('test_meta_dl.pt')
 
-    md = LearnerMetaData(batch_size=10,
-                         train_ratio=0.7,
-                         run_num=100,
-                         use_embeddings='init',
-                         )
+    md = fMRILearnerConfig(batch_size=10,
+                           train_ratio=0.7,
+                           run_num=100,
+                           use_embeddings='init',
+                           )
 
     ds = ScoresAmygDataset(data_location, md)
     train_ds, test_ds = ds.train_test_split()
@@ -129,7 +129,7 @@ def load_data_set(data_location: List[Path]):
 
 if __name__ == '__main__':
     # fibro_md = FibroSubjectMetaData('Fibro/Clinical.csv', '../split.json')
-    ptsd_md = PTSDSubjectMetaData('PTSD/Clinical.csv', '../split.json')
+    ptsd_md = PTSDSubjectMetaData('PTSD/Clinical.csv', '../runs/split.json')
 
     load = True
     train_dl, test_dl = load_data_set([

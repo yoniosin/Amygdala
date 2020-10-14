@@ -4,6 +4,7 @@ import json
 import numpy as np
 from oct2py import Oct2Py
 from pathlib import Path
+from omegaconf import MISSING
 
 
 def load_mat(path):
@@ -39,22 +40,28 @@ class ROIData:
 
 
 @dataclass
-class LearnerMetaData:
-    run_num: int
-    use_embeddings: str
-    batch_size: int = 2
+class LearnerConfig:
+    run_num: int = MISSING
+    max_epochs: int = 1000
+    batch_size: int = 10
     train_ratio: float = 0.8
     train_windows: int = 2
-    total_subject: int = field(init=False)
+    logger_path: str = MISSING
+    runs_dir: str = 'C:/Users/yonio/PycharmProjects/Amygdala_new/runs'
+    main_dir: str = 'C:/Users/yonio/PycharmProjects/Amygdala_new'
+
+    def validate_config(self):
+        assert 0 < self.train_ratio < 1
+
+
+@dataclass
+class fMRILearnerConfig(LearnerConfig):
+    use_embeddings: str = None
     min_w: int = field(init=False)
     voxels_num: int = field(init=False)
     in_channels: int = field(init=False)
-    logger_path: str = field(init=False)
-    runs_dir: str = 'runs'
 
-    def __post_init__(self):
-        assert 0 < self.train_ratio < 1
-        assert 0 < self.train_windows < 5
+    def update_cfg(self):
         # meta_dict = json.load(open('meta.txt', 'r'))
         # self.total_subject = 60
         self.min_w = 14
@@ -63,6 +70,39 @@ class LearnerMetaData:
         self.logger_path = f'{self.runs_dir}/run#{self.run_num}({self.use_embeddings})'
 
     def to_json(self): return asdict(self)
+
+    def validate_config(self):
+        super().validate_config()
+        assert 0 < self.train_windows < 5
+
+
+@dataclass
+class EEGNetConfig:
+    watch_hidden_size: int = 10
+    reg_hidden_size: int = 10
+    embedding_size: int = 5
+    watch_len: int = 20
+    reg_len: int = 60
+    lr: float = 1e-2
+    weight_decay: float = 0
+    n_subjects: int = 164
+
+
+@dataclass
+class EEGData:
+    db_type: list = field(default_factory=lambda: ['PTSD'])
+    load: bool = True
+    paths: dict = field(
+        default_factory=lambda: {'healthy': ('../Amygdala/data/3D', '../Amygdala/MetaData/fDemog.csv'),
+                                 'PTSD': ('../../../data/eeg/processed/PTSD', 'MetaData/PTSD/Clinical.csv'),
+                                 'Fibro': ('data/Fibro', 'MetaData/Fibro/Clinical.csv')})
+
+
+@dataclass
+class EEGLearnerConfig:
+    learner: LearnerConfig = LearnerConfig()
+    net: EEGNetConfig = EEGNetConfig()
+    data: EEGData = EEGData()
 
 
 @dataclass

@@ -1,8 +1,7 @@
-from util.config import LearnerMetaData
+from util.config import fMRILearnerConfig
 from torch import nn, optim
 import progressbar
 import torch
-from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
 from abc import abstractmethod, ABC
 from Models import Networks as Net
@@ -13,38 +12,37 @@ from functools import reduce
 from more_itertools import first_true
 from Models.Networks import StatisticalLinearBaseLine
 from collections import Counter
+import neptune
 
 
 class BaseModel(ABC):
     """ Wrapper which defines high-level training procedure and data saving """
-    def __init__(self, train_dl, test_dl, run_name, run_logger_path, **net_params):
-        self.run_logger_path = run_logger_path
+    def __init__(self, train_dl, test_dl, run_name, lr, weight_decay, **net_params):
         self.run_name = run_name
         self.train_dl = train_dl
         self.test_dl = test_dl
         self.net = self.build_NN(**net_params)
-        self.optimizer = optim.Adam(self.net.parameters(), lr=5e-4, weight_decay=0)
+        self.optimizer = optim.Adam(self.net.parameters(), lr, weight_decay=weight_decay)
 
     @abstractmethod
     def build_NN(self, **kwargs): pass
 
-    def update_logger(self, writer, train_stats, test_stats, epoch):
-        writer.add_scalar('train_loss', np.mean(train_stats), epoch)
+    def update_logger(self, train_stats, test_stats, epoch):
+        neptune.log_metric('train_loss', np.mean(train_stats))
         print(f'epoch# {epoch}, train error = {np.mean(train_stats)}')
-        writer.add_scalar('test_loss', np.mean(test_stats), epoch)
+        neptune.log_metric('test_loss', np.mean(test_stats))
         print(f'epoch# {epoch}, test error = {np.mean(test_stats)}')
 
     def train(self, n_epochs):
         bar = progressbar.ProgressBar()
-        writer = SummaryWriter(self.run_logger_path)
         for epoch in bar(range(n_epochs)):
             train_stats = self.run_model(train=True)
             test_stats = self.test()
 
-            self.update_logger(writer, train_stats, test_stats, epoch)
+            self.update_logger(train_stats, test_stats, epoch)
 
-        writer.close()
-        torch.save(self.net, f'trained models/{self.run_name}.pt')
+        torch.save(self.net, f'trained models_{self.run_name}.pt')
+        neptune.log_artifact(f'trained models_{self.run_name}.pt')
 
     def test(self):
         with torch.no_grad():
@@ -77,7 +75,7 @@ class BaseModel(ABC):
 
 class FmriModel(BaseModel, ABC):
     """Abstract method which defines high level function for seq2seq predictors"""
-    def __init__(self, md: LearnerMetaData, train_dl, test_dl, run_name, **net_params):
+    def __init__(self, md: fMRILearnerConfig, train_dl, test_dl, run_name, **net_params):
         self.n_windows = md.train_windows + 1
         super().__init__(train_dl, test_dl, run_name, run_logger_path=md.logger_path,
                          use_embeddings=md.use_embeddings, **net_params)
@@ -91,7 +89,7 @@ class FmriModel(BaseModel, ABC):
 
 
 class ReconstructiveModel(FmriModel):
-    def __init__(self, md: LearnerMetaData, train_dl, test_dl, **net_params):
+    def __init__(self, md: fMRILearnerConfig, train_dl, test_dl, **net_params):
         super().__init__(md, train_dl, test_dl, **net_params, run_name=f'sequence_{md.run_num}')
 
     def loss_func(self): return nn.MSELoss()
@@ -101,13 +99,9 @@ class ReconstructiveModel(FmriModel):
         x = Variable(x, requires_grad=train)
         y = self.extract_active(batch['data'])
         target = Variable(y, requires_grad=False)
-        output = self.calc_out(x, one_hot=batch['one_hot'], y=y)
+        output = self.net(x, one_hot=batch['one_hot'], y=y)
 
         return output, target
-
-    def calc_out(self, input_, **kwargs):
-        output, c = self.net(input_, kwargs['one_hot'], kwargs['y'])
-        return output
 
     def extract_active(self, data): return self.extract_part_from_data(data, 1)
 
@@ -118,7 +112,7 @@ class ReconstructiveModel(FmriModel):
 
 
 class STModel(ReconstructiveModel):
-    def __init__(self, md: LearnerMetaData, train_dl, test_dl, **net_params):
+    def __init__(self, md: fMRILearnerConfig, train_dl, test_dl, **net_params):
         super().__init__(md, train_dl, test_dl, **net_params)
 
     def build_NN(self, **kwargs): return Net.NewSTNet(**kwargs)
@@ -129,7 +123,7 @@ class STModel(ReconstructiveModel):
 
 
 class ClassifyingModel(FmriModel):
-    def __init__(self, md: LearnerMetaData, train_dl, test_dl, baseline):
+    def __init__(self, md: fMRILearnerConfig, train_dl, test_dl, baseline):
         self.baseline = baseline
         super().__init__(md, train_dl, test_dl)
 
@@ -301,3 +295,23 @@ class EmbeddingClassifierBaseline(EmbeddingClassifier):
 
     @property
     def run_type(self): return 'baseline_'
+
+
+class EEGModel(BaseModel):
+    def __init__(self, train_dl, test_dl, run_num, **net_params):
+        super().__init__(train_dl, test_dl, run_name=f'eeg_{run_num}',
+                         **net_params)
+
+    def calc_signals(self, batch, train):
+        watch = Variable(batch['watch'].squeeze(), requires_grad=train)
+        regulate = Variable(batch['regulate'].float().permute(1, 0, 2), requires_grad=False)
+        subject_id = batch['system_idx']
+        output = self.net(watch, regulate, subject_id)
+
+        return regulate, output
+
+    def loss_func(self):
+        return nn.MSELoss()
+
+    def build_NN(self, **kwargs):
+        return Net.EEGNetwork(**kwargs)

@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-from Models.EmbeddingLSTM import EmbeddingLSTM
+from Models.EmbeddingLSTM import EmbeddingLSTM, EEGEmbedingLSTM, EEGLSTM
 from itertools import chain
 
 
@@ -135,3 +135,27 @@ class CNNBaseline(nn.Module):
         z = self.conv(x)
         z = torch.mean(z, dim=(2, 3, 4))
         return self.mlp(z)
+
+
+class EEGNetwork(nn.Module):
+    def __init__(self, watch_len, reg_len, watch_hidden_size, reg_hidden_size, embedding_size, n_subjects=None):
+        super().__init__()
+        self.reg_len = reg_len
+        self.watch_hidden_size = watch_hidden_size
+
+        self.watch_enc = torch.nn.Linear(watch_len, reg_len * watch_hidden_size).float()
+        self.embedding_size = embedding_size
+        self.regulate_enc = EEGEmbedingLSTM(reg_hidden_size, embedding_size, n_subjects).float()
+        self.fc = torch.nn.Linear(watch_hidden_size + reg_hidden_size, 1).float()
+
+    def forward(self, watch, regulate, subject_id):
+        reg_len, batch_size, _ = regulate.shape
+        watch_rep = self.watch_enc(watch.float()).view((reg_len, batch_size, -1))
+
+        regulate_rep, _ = self.regulate_enc(regulate.float(), subject_id)
+
+        joint_rep = torch.cat((watch_rep, regulate_rep), dim=-1).view(batch_size*reg_len, -1)
+        out = self.fc(joint_rep)
+
+        return out.view(reg_len, batch_size, -1)
+

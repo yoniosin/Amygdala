@@ -1,5 +1,5 @@
-from util.config import LearnerMetaData
-from util.AmygDataSet import AmygDataSet, ScoresAmygDataset
+from util.config import fMRILearnerConfig
+from util.AmygDataSet import ScoresAmygDataset
 from argparse import ArgumentParser
 from pathlib import Path
 import torch
@@ -15,12 +15,13 @@ from dataclasses import dataclass
 import Models.Predictors as Prd
 
 
+
 @dataclass
 class DBWrapper:
     db_type: str
     data_path: Path
     meta_data_path: str
-    split_path: str = 'split.json'
+    split_path: str = 'runs/split.json'
 
     def generate_meta_data(self):
         if self.db_type == 'healthy':
@@ -89,12 +90,12 @@ def prepare_run():
     if args.create_mapping:
         create_mapping([Path('../Amygdala/data/3D'), Path('data/PTSD'), Path('data/Fibro')])
 
-    return LearnerMetaData(batch_size=10,
-                           train_ratio=0.9,
-                           run_num=binned_run_num if binned else run_num,
-                           use_embeddings=args.embed,
-                           train_windows=1
-                           )
+    return fMRILearnerConfig(batch_size=10,
+                             train_ratio=0.9,
+                             run_num=binned_run_num if binned else run_num,
+                             use_embeddings=args.embed,
+                             train_windows=1
+                             )
 
 
 def upload_db(db_type_list):
@@ -124,8 +125,8 @@ if __name__ == '__main__':
     md = prepare_run()
 
     data_loaders, network_params, db_list = upload_db([
-        'healthy',
-        # 'PTSD',
+        # 'healthy',
+        'PTSD',
         # 'Fibro',
     ])
 
