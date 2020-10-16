@@ -4,7 +4,7 @@ import re
 from Models.Predictors import EmbeddingPredictor
 from pathlib import Path
 import json
-from util.AmygDataSet import AmygDataSet, ScoresAmygDataset
+from data.AmygDataSet import ScoresAmygDataset
 from torch.utils.data import DataLoader
 from util.config import fMRILearnerConfig
 from typing import List

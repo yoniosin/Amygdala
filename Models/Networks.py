@@ -146,22 +146,36 @@ class EEGNetwork(pl.LightningModule):
                  reg_hidden_size,
                  embedding_size,
                  lr,
+                 train_lstm: bool = True,
                  weight_decay=0,
                  n_subjects=None):
         super().__init__()
         self.reg_len = reg_len
         self.watch_hidden_size = watch_hidden_size
-
-        self.watch_enc = torch.nn.Linear(watch_len, reg_len * watch_hidden_size).float()
         self.embedding_size = embedding_size
+        self.train_lstm = train_lstm
+
+        self.watch_enc = nn.Sequential(
+            nn.Linear(watch_len, reg_len * watch_hidden_size).float(),
+            nn.ReLU()
+        )
+
         self.regulate_enc = EEGEmbedingLSTM(reg_hidden_size, embedding_size, n_subjects).float()
-        self.fc = torch.nn.Linear(watch_hidden_size + reg_hidden_size, 1).float()
+        self.regulate_enc.lstm.requires_grad_(train_lstm)
+
+        self.fc = nn.Linear(watch_hidden_size + reg_hidden_size, 1).float()
         self.loss_fn = nn.MSELoss()
         self.lr = lr
         self.weight_decay = weight_decay
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+    def first_phase_requires_grad(self, requires_grad: bool):
+        """Freeze / un-freeze first phase components"""
+        self.train_lstm = requires_grad
+        self.watch_enc.requires_grad_(requires_grad)
+        self.regulate_enc.lstm.requires_grad_(requires_grad)
 
     def forward(self, batch):
         watch = batch['watch'].squeeze()
@@ -172,6 +186,7 @@ class EEGNetwork(pl.LightningModule):
         watch_rep = self.watch_enc(watch.float()).view((reg_len, batch_size, -1))
 
         regulate_rep, _ = self.regulate_enc(regulate.float(), subject_id)
+        regulate_rep = nn.functional.relu(regulate_rep)
 
         joint_rep = torch.cat((watch_rep, regulate_rep), dim=-1).view(batch_size*reg_len, -1)
         out = self.fc(joint_rep).view(reg_len, batch_size, -1)
@@ -181,10 +196,13 @@ class EEGNetwork(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self(batch)
+        metric_name = ('train' if self.train_lstm else 'val') + '_loss'
 
-        self.log('train_loss', loss)
+        self.log(metric_name, loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
         loss = self(batch)
+        self.regulate_enc.embedding_lut.train()
+
         self.log('val_loss', loss)

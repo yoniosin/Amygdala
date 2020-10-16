@@ -167,7 +167,7 @@ class EEGWindow(Window):
         return bold_mat[self.time]
 
     def get_data(self, *args):
-        return self.bold
+        return torch.tensor(self.bold)
 
 
 class EEGSubjectPTSD:
@@ -181,23 +181,26 @@ class EEGSubjectPTSD:
         self.medical_idx = medical_idx
         self.system_idx = system_idx
         self.paired_windows = self.generate_windows(data_path)
+        self.num_windows = None
 
     def generate_windows(self, data_path):
         mat = loadmat(data_path)
         signal = mat['clean_data'] if self.use_clean_data else mat['data']
-        num_windows = len(signal) // (self.passive_duration + self.nf_duration)
+        self.num_windows = len(signal) // (self.passive_duration + self.nf_duration)
 
         paired_windows = []
-        for w in range(num_windows):
+        for w in range(self.num_windows):
             passive = EEGWindow(w, signal, w * self.total_duration, self.passive_duration, 'watch')
             nf = EEGWindow(w, signal, w * self.total_duration + self.passive_duration, self.nf_duration, 'regulate')
             paired_windows.append(PairedWindows(passive, nf))
 
         return paired_windows
 
-    def get_data(self):
-        chosen_window = self.paired_windows[randint(0, len(self.paired_windows) - 1)]
-        return {'watch': chosen_window.watch_window.get_data(), 'regulate': chosen_window.regulate_window.get_data(),
+    def get_data(self, num_windows=3):
+        # num_windows = max(num_windows, self.num_windows)
+        watch = torch.cat([w.watch_window.get_data() for w in self.paired_windows[:num_windows]])
+        regulate = torch.cat([w.regulate_window.get_data() for w in self.paired_windows[:num_windows]])
+        return {'watch': watch, 'regulate': regulate,
                 'medical_idx': self.medical_idx,
                 'system_idx': self.system_idx}
 

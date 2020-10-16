@@ -98,7 +98,7 @@ class ScoresAmygDataset(fMRIDataSet):
     kwargs should include 'subject_path' and 'md'
     """
     def __init__(self, subjects_data_path: Iterable[Path], md: LearnerConfig, load=False):
-        self.invalid = json.load(open('invalid_subjects.json', 'r'))
+        self.invalid = json.load(open('../util/invalid_subjects.json', 'r'))
         super().__init__(subjects_data_path, md, load)
 
     def is_subject_valid(self, subject_num):
@@ -106,7 +106,7 @@ class ScoresAmygDataset(fMRIDataSet):
 
 
 class EEGDataSet(AmygDataSet):
-    def __init__(self, subjects_path: Iterable[Path], cfg: EEGLearnerConfig):
+    def __init__(self, subjects_path: Iterable[Path], cfg: LearnerConfig):
         super().__init__(subjects_path, cfg)
         self.data_shape = self.subjects_list[0].data_shape
 

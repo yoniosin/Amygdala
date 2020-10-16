@@ -1,5 +1,5 @@
 from util.config import fMRILearnerConfig
-from util.AmygDataSet import ScoresAmygDataset
+from data.AmygDataSet import ScoresAmygDataset
 from argparse import ArgumentParser
 from pathlib import Path
 import torch

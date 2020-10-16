@@ -113,14 +113,14 @@ class ConcatEmbeddingLSTMCell(EmbeddingLSTMCell):
 
 
 class EEGEmbedingLSTM(nn.Module):
-    def __init__(self, hidden_size, embedding_size=0, n_subjects=None):
+    def __init__(
+            self, hidden_size, embedding_size=0, n_subjects=None):
         super().__init__()
 
         self.n_subjects = n_subjects
         if embedding_size > 0:
             assert n_subjects > 0, "embedding size must be greater than 0 if n_subjects is provided"
             self.embedding_lut = nn.Embedding(n_subjects, embedding_size)
-            # self.embedding_lut.weight.requires_grad = False
             self.arrange_inputs = self.concat_embeddings
         else:
             self.arrange_inputs = lambda x, s_id: x

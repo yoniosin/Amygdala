@@ -29,7 +29,7 @@ class ROIData:
 
 @dataclass
 class LearnerConfig:
-    max_epochs: int = 1000
+    max_epochs: int = 500
     batch_size: int = 10
     train_ratio: float = 0.8
     train_windows: int = 2
@@ -64,20 +64,21 @@ class fMRILearnerConfig(LearnerConfig):
 
 @dataclass
 class EEGNetConfig:
-    watch_hidden_size: int = 10
-    reg_hidden_size: int = 10
-    embedding_size: int = 5
-    watch_len: int = 20
-    reg_len: int = 60
+    watch_hidden_size: int = 13
+    reg_hidden_size: int = 13
+    embedding_size: int = 3
+    watch_len: int = 60
+    reg_len: int = 180
     lr: float = 1e-2
     weight_decay: float = 0
     n_subjects: int = 164
+    train_lstm: bool = True
 
 
 @dataclass
 class EEGData:
     db_type: list = field(default_factory=lambda: ['PTSD'])
-    load: bool = True
+    load: bool = False
     paths: dict = field(
         default_factory=lambda: {'healthy': ('../Amygdala/data/3D', '../Amygdala/MetaData/fDemog.csv'),
                                  'PTSD': ('../../../data/eeg/processed/PTSD', 'MetaData/PTSD/Clinical.csv'),
