@@ -1,11 +1,10 @@
 import pytorch_lightning as pl
-from data.AmygDataSet import EEGDataSet
 from util.config import EEGLearnerConfig
 from dataclasses import dataclass
 from pathlib import Path
 from torch.utils.data import DataLoader
 import torch
-from util.Subject import PTSDCriteriaDataSet
+from data.amygdala_data_set import PTSDCriteriaDataSet
 
 
 @dataclass

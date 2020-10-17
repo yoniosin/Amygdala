@@ -6,7 +6,7 @@ from flatten_dict import flatten
 import pytorch_lightning as pl
 from pytorch_lightning.loggers.neptune import NeptuneLogger
 from data.eeg.eeg_data_module import FirstPhaseEEGData, SecondPhaseEEGData
-from util.Subject import *
+from data.subject import EEGSubjectPTSD, EEGWindow, PairedWindows  # needed for pickling
 
 
 def train_first_phase(cfg, model=None):
@@ -43,7 +43,8 @@ def create_trainer(cfg, tags):
             tags=tags,
             params=flatten(cfg, reducer='path')
         ),
-        max_epochs=cfg.learner.max_epochs
+        max_epochs=cfg.learner.max_epochs,
+        # fast_dev_run=True
     )
 
     return trainer
@@ -53,12 +54,12 @@ def create_trainer(cfg, tags):
 def main(cfg: EEGLearnerConfig):
     first_phase_model = train_first_phase(cfg)
 
-    second_phase_model: Net.EEGNetwork = train_second_phase(cfg, first_phase_model)
+    # second_phase_model: Net.EEGNetwork = train_second_phase(cfg, first_phase_model)
 
-    third_phase_model = Net.IndicesNetwrork(
-        second_phase_model.regulate_enc.embedding_lut, len(cfg.criteria.outputs)
-    )
-    train_third_phase(cfg, third_phase_model)
+    # third_phase_model = Net.IndicesNetwrork(
+    #     second_phase_model.regulate_enc.embedding_lut, len(cfg.criteria.outputs)
+    # )
+    # train_third_phase(cfg, third_phase_model)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 from util.config import load_mat
-from util.Subject import Subject, SubjectMetaData
+from data.Subject import Subject, SubjectMetaData
 import numpy as np
 from util.config import ROIData
 import nibabel as nib

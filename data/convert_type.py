@@ -1,5 +1,5 @@
 from pathlib import Path
-from util.Subject import Subject, FibroSubject
+from data.Subject import Subject
 import pickle
 
 if __name__ == '__main__':
