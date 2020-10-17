@@ -9,6 +9,8 @@ from torch.utils.data import DataLoader
 from util.config import fMRILearnerConfig
 from typing import List
 from abc import abstractmethod
+import pytorch_lightning as pl
+from util.config import EEGLearnerConfig
 
 
 class SubjectsMetaData:

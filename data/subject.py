@@ -4,11 +4,9 @@ from abc import abstractmethod
 import torch
 import numpy as np
 from scipy.io import loadmat
-import re
-import pickle
 from pathlib import Path
 import json
-from random import randint
+from dataclasses import dataclass, asdict
 
 
 class Window:
@@ -170,6 +168,13 @@ class EEGWindow(Window):
         return torch.tensor(self.bold)
 
 
+@dataclass
+class Criteria:
+    caps: int = None
+    stai: int = None
+    tas: int = None
+
+
 class EEGSubjectPTSD:
     passive_duration = 20
     nf_duration = 60
@@ -182,6 +187,7 @@ class EEGSubjectPTSD:
         self.system_idx = system_idx
         self.paired_windows = self.generate_windows(data_path)
         self.num_windows = None
+        self.criteria = None
 
     def generate_windows(self, data_path):
         mat = loadmat(data_path)
@@ -196,23 +202,24 @@ class EEGSubjectPTSD:
 
         return paired_windows
 
-    def get_data(self, num_windows=3):
+    def get_data(self, num_windows=3, use_criteria=False):
         # num_windows = max(num_windows, self.num_windows)
         watch = torch.cat([w.watch_window.get_data() for w in self.paired_windows[:num_windows]])
         regulate = torch.cat([w.regulate_window.get_data() for w in self.paired_windows[:num_windows]])
-        return {'watch': watch, 'regulate': regulate,
-                'medical_idx': self.medical_idx,
-                'system_idx': self.system_idx}
+
+        res = {'watch': watch, 'regulate': regulate,
+               'medical_idx': self.medical_idx,
+               'system_idx': self.system_idx}
+        if use_criteria:
+            res.update({'criteria': asdict(self.criteria)})
+
+        return res
 
 
 if __name__ == '__main__':
-    data_dir = Path('../data/eeg/raw/PTSD')
+    data_dir_ = Path('eeg/raw/PTSD')
     mapping = json.load(open('../mapping.json', 'r'))
-    for path in data_dir.iterdir():
-        medical_idx = str(int(re.search(r'sub-(\d+)', str(path)).group(1)))
-        if mapping.get(medical_idx):
-            system_idx = mapping[medical_idx]
-            subject = EEGSubjectPTSD(path, medical_idx, system_idx)
+    criteria_dir_ = r'/MetaData/PTSD/Clinical.csv'
 
-            with open(f'../data/eeg/processed/PTSD/sub-{subject.medical_idx}.pkl', 'wb') as file:
-                pickle.dump(subject, file)
+    data_set = PTSDCriteriaDataSet(data_dir_, criteria_dir_)
+    data_set.dump()
