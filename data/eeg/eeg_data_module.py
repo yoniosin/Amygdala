@@ -5,14 +5,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from torch.utils.data import DataLoader
 import torch
+from util.Subject import PTSDCriteriaDataSet
 
 
 @dataclass
 class DBWrapper:
     db_type: str
-    data_path: Path
-    meta_data_path: str
-    split_path: str = 'split.json'
+    data_dir: Path
+    criteria_path: str
 
     # def generate_meta_data(self, runs_dir: Path):
     #     if self.db_type == 'healthy':
@@ -30,10 +30,9 @@ class DBWrapper:
 class EEGDataModule(pl.LightningDataModule):
     config: EEGLearnerConfig = None
 
-    def __init__(self, cfg=None):
+    def __init__(self, cfg: EEGLearnerConfig):
         super().__init__()
-        if cfg:
-            self.config = cfg
+        self.config = cfg
         self.train_ds, self.test_ds = None, None
 
     def setup(self, stage=None):
@@ -42,8 +41,16 @@ class EEGDataModule(pl.LightningDataModule):
             self.test_ds = torch.load(f'{self.config.learner.main_dir}/data/eeg/test.pt').dataset
         else:
             db_list = [DBWrapper(db_type, *self.config.data.paths[db_type]) for db_type in self.config.data.db_type]
-            ds = EEGDataSet([db.data_path for db in db_list], self.config.learner)
-            self.train_ds, self.test_ds = ds.train_test_split()
+            data_dir_iter = (Path(db.data_dir) for db in db_list)
+            criteria_dir_iter = (Path(db.criteria_path) for db in db_list)
+
+            ds = PTSDCriteriaDataSet(
+                data_dir_iter,
+                criteria_dir_iter,
+                load=Path(r'C:\Users\yonio\PycharmProjects\Amygdala_new\data\eeg\processed\PTSD')
+            )
+
+            self.train_ds, self.test_ds = ds.train_test_split(self.config.learner.train_ratio)
             torch.save(self.train_ds, f'{self.config.learner.main_dir}/data/eeg/train.pt')
             torch.save(self.test_ds, f'{self.config.learner.main_dir}/data/eeg/test.pt')
 

@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-from Models.EmbeddingLSTM import EmbeddingLSTM, EEGEmbedingLSTM, EEGLSTM
+from Models.EmbeddingLSTM import EmbeddingLSTM, EEGEmbedingLSTM
 from itertools import chain
 import pytorch_lightning as pl
 
@@ -204,5 +204,32 @@ class EEGNetwork(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         loss = self(batch)
         self.regulate_enc.embedding_lut.train()
+
+        self.log('val_loss', loss)
+
+
+class IndicesNetwrork(pl.LightningModule):
+    def __init__(self, embedding_lut: nn.Module, output_len):
+        super().__init__()
+        self.embedding_lut = embedding_lut
+        self.embedding_lut.requires_grad_(False)  # freeze LUT
+        self.fc = nn.Linear(embedding_lut.shape[1], output_len)
+        self.loss_fn = nn.CrossEntropyLoss()
+
+    def forward(self, subject_id, ground_truth):
+        embeddings = self.embedding_lut(subject_id)
+        prediction = self.fc(embeddings)
+        loss = self.loss_fn(prediction, ground_truth)
+
+        return loss
+
+    def training_step(self, subject_id, ground_truth):
+        loss = self(subject_id, ground_truth)
+
+        self.log('train_loss', loss)
+        return loss
+
+    def validation_step(self, subject_id, ground_truth):
+        loss = self(subject_id, ground_truth)
 
         self.log('val_loss', loss)

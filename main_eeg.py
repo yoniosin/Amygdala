@@ -29,6 +29,12 @@ def train_second_phase(cfg, model: Net.EEGNetwork, state_dict=None):
     trainer = create_trainer(cfg, ['Second'])
     trainer.fit(model, datamodule=data)
 
+    return model
+
+
+def train_third_phase(cfg, model):
+    trainer = create_trainer(cfg, ['indices'])
+
 
 def create_trainer(cfg, tags):
     trainer = pl.Trainer(
@@ -45,8 +51,14 @@ def create_trainer(cfg, tags):
 
 @hydra.main(config_name='eeg')
 def main(cfg: EEGLearnerConfig):
-    model = train_first_phase(cfg)
-    train_second_phase(cfg, model)
+    first_phase_model = train_first_phase(cfg)
+
+    second_phase_model: Net.EEGNetwork = train_second_phase(cfg, first_phase_model)
+
+    third_phase_model = Net.IndicesNetwrork(
+        second_phase_model.regulate_enc.embedding_lut, len(cfg.criteria.outputs)
+    )
+    train_third_phase(cfg, third_phase_model)
 
 
 if __name__ == '__main__':

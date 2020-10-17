@@ -81,7 +81,8 @@ class EEGData:
     load: bool = False
     paths: dict = field(
         default_factory=lambda: {'healthy': ('../Amygdala/data/3D', '../Amygdala/MetaData/fDemog.csv'),
-                                 'PTSD': ('../../../data/eeg/processed/PTSD', 'MetaData/PTSD/Clinical.csv'),
+                                 'PTSD': ('../../../data/eeg/processed/PTSD',
+                                          r'C:\Users\yonio\PycharmProjects\Amygdala_new\MetaData\PTSD\Clinical.csv'),
                                  'Fibro': ('data/Fibro', 'MetaData/Fibro/Clinical.csv')})
 
 
