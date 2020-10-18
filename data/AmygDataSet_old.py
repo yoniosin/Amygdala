@@ -72,7 +72,7 @@ class fMRIDataSet(AmygDataSet):
             sub = pickle.load(open(str(subject_path), 'rb'))
             sub_num = str(int(re.search(r'(\d{,4})$', sub.name).group(1)))  # remove leading 0s
             if self.is_subject_valid(sub_num):
-                data = sub.get_data(md.train_windows, md.min_w, scalar_result=False)
+                data = sub.get_eeg(md.train_windows, md.min_w, scalar_result=False)
                 res_list.append({'sub_num': sub_num,
                                  'one_hot': create_one_hot(mapping[sub_num]),
                                  'data': data,
@@ -124,6 +124,6 @@ class EEGDataSet(AmygDataSet):
         return len(self.subjects_list)
 
     def __getitem__(self, item):
-        return self.subjects_list[item].get_data()
+        return self.subjects_list[item].get_eeg()
 
     def get_sample_shape(self): return self.data_shape
