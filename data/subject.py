@@ -209,7 +209,8 @@ class EEGSubjectPTSD:
 
         res = {'watch': watch, 'regulate': regulate,
                'medical_idx': self.medical_idx,
-               'system_idx': self.system_idx}
+               'system_idx': self.system_idx
+               }
         if use_criteria:
             res.update({'criteria': asdict(self.criteria)})
 

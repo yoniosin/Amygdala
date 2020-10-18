@@ -1,5 +1,5 @@
 from dataclasses import dataclass, asdict, field
-from typing import List
+from typing import List, Literal, Tuple
 
 
 # def get_roi_md(dict_path=Path('../PreProcess/voxels_dict.txt'), raw_roi_path='../raw_data/ROI.mat'):
@@ -76,14 +76,33 @@ class EEGNetConfig:
 
 
 @dataclass
+class DataPaths:
+    type: str
+    eeg_dir: str
+    criteria_dir: str
+
+
+@dataclass
 class EEGData:
-    db_type: list = field(default_factory=lambda: ['PTSD'])
+    db_type: Tuple[str] = ('ptsd',)
     load: bool = False
-    paths: dict = field(
-        default_factory=lambda: {'healthy': ('../Amygdala/data/3D', '../Amygdala/MetaData/fDemog.csv'),
-                                 'PTSD': ('../../../data/eeg/processed/PTSD',
-                                          r'C:\Users\yonio\PycharmProjects\Amygdala_new\MetaData\PTSD\Clinical.csv'),
-                                 'Fibro': ('data/Fibro', 'MetaData/Fibro/Clinical.csv')})
+    use_criteria: bool = False
+    ptsd_paths: DataPaths = DataPaths(
+        'ptsd',
+        '../../../data/eeg/processed/PTSD',
+        r'C:\Users\yonio\PycharmProjects\Amygdala_new\MetaData\PTSD\Clinical.csv')
+
+    control_paths: DataPaths = DataPaths(
+        'control',
+        '../Amygdala/data/3D',
+        '../Amygdala/MetaData/fDemog.csv'
+    )
+
+    fibro_paths: DataPaths = DataPaths(
+        'fibro',
+        'data/Fibro',
+        'MetaData/Fibro/Clinical.csv'
+    )
 
 
 @dataclass
