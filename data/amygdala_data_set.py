@@ -18,8 +18,12 @@ class AmygDataSet(Dataset):
 
         # used for random access by data loaders
         self.subjects_list = list(self.subjects_dict.values())
+        self.train_ds, self.test_ds = None, None
 
-    def dump(self, dump_location=f'../data/eeg/processed/dataset.pkl'):
+    def dump(
+        self,
+        dump_location=r'C:\Users\yonio\PycharmProjects\Amygdala_new\data\eeg\processed\dataset.pkl'
+    ):
         with open(dump_location, 'wb') as file_:
             pickle.dump(self, file_)
 
@@ -46,7 +50,7 @@ class AmygDataSet(Dataset):
         return subject_dict
 
     def __getitem__(self, item):
-        return self.subjects_list[item].get_data()
+        return self.subjects_list[item].get_eeg()
 
     def __len__(self):
         return len(self.subjects_list)
@@ -55,7 +59,8 @@ class AmygDataSet(Dataset):
         train_len = int(len(self) * train_ratio)
         test_len = len(self) - train_len
 
-        return random_split(self, (train_len, test_len))
+        self.train_ds, self.test_ds = random_split(self, (train_len, test_len))
+        return self.train_ds, self.test_ds
 
 
 class CriteriaDataSet(AmygDataSet):
@@ -80,7 +85,7 @@ class CriteriaDataSet(AmygDataSet):
                     self.subjects_dict[md[0]].criteria = md[1]
 
     def __getitem__(self, item):
-        return self.subjects_list[item].get_data(use_criteria=True)
+        return self.subjects_list[item].get_criteria()
 
     def extract_meta_data_ptsd(self, line) -> Union[Tuple[int, sub.Criteria], None]:
         if self.is_subject_valid_ptsd(line):

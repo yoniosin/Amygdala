@@ -202,19 +202,24 @@ class EEGSubjectPTSD:
 
         return paired_windows
 
-    def get_data(self, num_windows=3, use_criteria=False):
+    def get_eeg(self, num_windows=3):
         # num_windows = max(num_windows, self.num_windows)
         watch = torch.cat([w.watch_window.get_data() for w in self.paired_windows[:num_windows]])
         regulate = torch.cat([w.regulate_window.get_data() for w in self.paired_windows[:num_windows]])
 
-        res = {'watch': watch, 'regulate': regulate,
-               'medical_idx': self.medical_idx,
-               'system_idx': self.system_idx
-               }
-        if use_criteria:
-            res.update({'criteria': asdict(self.criteria)})
+        res = {'watch': watch, 'regulate': regulate, **self.get_id()}
 
         return res
+
+    def get_criteria(self):
+        return {**asdict(self.criteria), **self.get_id()}
+
+    def get_id(self):
+        return {
+            'medical_idx': self.medical_idx,
+            'system_idx': self.system_idx
+        }
+
 
 
 if __name__ == '__main__':

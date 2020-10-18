@@ -1,10 +1,10 @@
 import pytorch_lightning as pl
 from util.config import EEGLearnerConfig
-from dataclasses import dataclass
 from pathlib import Path
 from torch.utils.data import DataLoader
 import torch
-from data.amygdala_data_set import CriteriaDataSet
+from data.amygdala_data_set import AmygDataSet, CriteriaDataSet
+import pickle
 
 
 # def generate_meta_data(self, runs_dir: Path):
@@ -37,17 +37,25 @@ class EEGDataModule(pl.LightningDataModule):
         )
 
         self.train_ds, self.test_ds = ds.train_test_split(self.config.learner.train_ratio)
-        torch.save(self.train_ds, f'{self.config.learner.main_dir}/data/eeg/train.pt')
-        torch.save(self.test_ds, f'{self.config.learner.main_dir}/data/eeg/test.pt')
+        ds.dump()
 
     def setup(self, stage=None):
         if self.config.data.load:
-            self.train_ds = torch.load(f'{self.config.learner.main_dir}/data/eeg/train.pt').dataset
-            self.test_ds = torch.load(f'{self.config.learner.main_dir}/data/eeg/test.pt').dataset
+            self.load_ds()
         else:
             self.build_ds()
 
-    def test_dataloader(self):
+    def load_ds(self):
+        ds: AmygDataSet = pickle.load(
+            open(r'C:\Users\yonio\PycharmProjects\Amygdala_new\data\eeg\processed\dataset.pkl', 'rb')
+        )
+        if self.config.data.re_split:
+            ds.train_test_split(self.config.learner.train_ratio)
+
+        self.train_ds = ds.train_ds
+        self.test_ds = ds.test_ds
+
+def test_dataloader(self):
         return DataLoader(self.test_ds)
 
 

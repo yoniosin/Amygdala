@@ -85,7 +85,8 @@ class DataPaths:
 @dataclass
 class EEGData:
     db_type: Tuple[str] = ('ptsd',)
-    load: bool = False
+    load: bool = True
+    re_split: bool = False
     use_criteria: bool = False
     ptsd_paths: DataPaths = DataPaths(
         'ptsd',
