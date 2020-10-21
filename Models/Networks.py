@@ -180,7 +180,7 @@ class EEGNetwork(pl.LightningModule):
     def forward(self, batch):
         watch = batch['watch'].squeeze()
         regulate = batch['regulate'].float().permute(1, 0, 2)
-        subject_id = batch['system_idx']
+        subject_id = batch['id']['system_idx']
 
         reg_len, batch_size, _ = regulate.shape
         watch_rep = self.watch_enc(watch.float()).view((reg_len, batch_size, -1))
@@ -209,27 +209,42 @@ class EEGNetwork(pl.LightningModule):
 
 
 class IndicesNetwrork(pl.LightningModule):
+    criteria_name = ['caps', 'stai', 'tas']
+
     def __init__(self, embedding_lut: nn.Module, output_len):
         super().__init__()
         self.embedding_lut = embedding_lut
         self.embedding_lut.requires_grad_(False)  # freeze LUT
-        self.fc = nn.Linear(embedding_lut.shape[1], output_len)
-        self.loss_fn = nn.CrossEntropyLoss()
+        self.fc = nn.Linear(embedding_lut.embedding_dim, output_len).float()
+        self.loss_fn = nn.MSELoss(reduction='none')
 
     def forward(self, subject_id, ground_truth):
         embeddings = self.embedding_lut(subject_id)
         prediction = self.fc(embeddings)
-        loss = self.loss_fn(prediction, ground_truth)
+        loss = torch.mean(self.loss_fn(prediction, ground_truth), dim=0)
 
         return loss
 
-    def training_step(self, subject_id, ground_truth):
-        loss = self(subject_id, ground_truth)
-
+    def training_step(self, batch, batch_idx):
+        ground_truth = torch.stack([batch[name] for name in self.criteria_name], dim=-1).float()
+        loss = self(batch['system_idx'], ground_truth)
+        self.log_results(loss, True)
+        loss = torch.mean(loss)
         self.log('train_loss', loss)
+
         return loss
 
-    def validation_step(self, subject_id, ground_truth):
-        loss = self(subject_id, ground_truth)
+    def log_results(self, loss, train: bool):
+        for idx, name in enumerate(self.criteria_name):
+            metric_name = ('train' if train else 'val') + f'_{name}'
+            self.log(metric_name, torch.mean(loss[idx]))
 
-        self.log('val_loss', loss)
+    def validation_step(self, batch, batch_idx):
+        ground_truth = torch.stack([batch[name] for name in self.criteria_name], dim=-1).float()
+        loss = self(batch['system_idx'], ground_truth)
+
+        self.log_results(loss, False)
+        self.log('val_loss', torch.mean(loss), prog_bar=True)
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=1e-2)

@@ -23,27 +23,43 @@ import pickle
 class EEGDataModule(pl.LightningDataModule):
     config: EEGLearnerConfig = None
 
-    def __init__(self, cfg: EEGLearnerConfig):
+    def __init__(self, cfg: EEGLearnerConfig = None, dataset_class=CriteriaDataSet, use_criteria=False):
         super().__init__()
-        self.config = cfg
+        self.config = cfg or self.config
         self.train_ds, self.test_ds = None, None
+        self.dataset_class = dataset_class
+        self._phase = 1
+        self.ds:CriteriaDataSet = None
+        self.use_criteria = use_criteria
 
-    def build_ds(self):
-        paths_dir_iter = [getattr(self.config.data, f'{p}_paths') for p in self.config.data.db_type]
-
-        ds = CriteriaDataSet(
-            paths_dir_iter,
-            load=Path(r'C:\Users\yonio\PycharmProjects\Amygdala_new\data\eeg\processed\PTSD')
-        )
-
-        self.train_ds, self.test_ds = ds.train_test_split(self.config.learner.train_ratio)
-        ds.dump()
-
-    def setup(self, stage=None):
         if self.config.data.load:
             self.load_ds()
         else:
             self.build_ds()
+
+
+    @property
+    def phase(self): return self._phase
+
+    @phase.setter
+    def phase(self, new_val):
+        self._phase = new_val
+        if new_val == 3:
+            self.ds.use_criteria = True
+            self.train_ds, self.test_ds = self.ds.train_test_split(self.config.learner.train_ratio)
+
+    def build_ds(self):
+        paths_dir_iter = [getattr(self.config.data, f'{p}_paths') for p in self.config.data.db_type]
+
+        ds = self.dataset_class(
+            paths_dir_iter,
+            load=Path(r'C:\Users\yonio\PycharmProjects\Amygdala_new\data\eeg\processed\PTSD'),
+            use_criteria=self.use_criteria
+        )
+
+        self.train_ds, self.test_ds = ds.train_test_split(self.config.learner.train_ratio)
+        ds.dump()
+        self.ds = ds
 
     def load_ds(self):
         ds: AmygDataSet = pickle.load(
@@ -52,18 +68,15 @@ class EEGDataModule(pl.LightningDataModule):
         if self.config.data.re_split:
             ds.train_test_split(self.config.learner.train_ratio)
 
+        self.ds = ds
         self.train_ds = ds.train_ds
         self.test_ds = ds.test_ds
 
-def test_dataloader(self):
-        return DataLoader(self.test_ds)
-
-
-class SecondPhaseEEGData(EEGDataModule):
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.train_ds, self.config.learner.batch_size, shuffle=True)
+        if self.phase in (1, 3):
+            return DataLoader(self.train_ds, self.config.learner.batch_size, shuffle=True)
+        elif self.phase == 2:
+            return DataLoader(self.test_ds, self.config.learner.batch_size, shuffle=True)
 
-
-class FirstPhaseEEGData(EEGDataModule):
-    def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.test_ds, self.config.learner.batch_size)
+    def val_dataloader(self) -> DataLoader:
+        return DataLoader(self.test_ds, self.config.learner.batch_size) if self.phase == 3 else None

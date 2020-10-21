@@ -17,7 +17,7 @@ class AmygDataSet(Dataset):
         self.subjects_dict = self.load_subjects(load) if load else self.create_subjects(data_paths_iter)
 
         # used for random access by data loaders
-        self.subjects_list = list(self.subjects_dict.values())
+        self.eeg_subjects_list = list(self.subjects_dict.values())
         self.train_ds, self.test_ds = None, None
 
     def dump(
@@ -38,7 +38,7 @@ class AmygDataSet(Dataset):
 
     def create_subjects(self, data_paths_iter: Iterable[DataPaths]):
         subject_dict = {}
-        mapping = json.load(open('../mapping.json', 'r'))
+        mapping = json.load(open(r'C:\Users\yonio\PycharmProjects\Amygdala_new\mapping.json', 'r'))
         for data_dir in data_paths_iter:
             for path in Path(data_dir.eeg_dir).iterdir():
                 medical_idx = str(int(re.search(r'sub-(\d+)', str(path)).group(1)))
@@ -50,10 +50,10 @@ class AmygDataSet(Dataset):
         return subject_dict
 
     def __getitem__(self, item):
-        return self.subjects_list[item].get_eeg()
+        return self.eeg_subjects_list[item].get_eeg()
 
     def __len__(self):
-        return len(self.subjects_list)
+        return len(self.eeg_subjects_list)
 
     def train_test_split(self, train_ratio):
         train_len = int(len(self) * train_ratio)
@@ -67,11 +67,13 @@ class CriteriaDataSet(AmygDataSet):
     def __init__(
             self,
             data_paths_iter: Iterable[DataPaths],
-            load: Path = None
+            load: Path = None,
+            use_criteria: bool = False,
     ):
         super().__init__(data_paths_iter, load)
         self.load_criteria(data_paths_iter)
-        self.subjects_list = [v for v in self.subjects_list if hasattr(v, 'criteria')]
+        self.criteria_subjects = [v for v in self.eeg_subjects_list if hasattr(v, 'criteria')]
+        self.use_criteria = use_criteria
 
     def is_subject_valid(self, line):
         sub_num = line['subject']
@@ -85,7 +87,13 @@ class CriteriaDataSet(AmygDataSet):
                     self.subjects_dict[md[0]].criteria = md[1]
 
     def __getitem__(self, item):
-        return self.subjects_list[item].get_criteria()
+        if self.use_criteria:
+            return self.criteria_subjects[item].get_criteria()
+        else:
+            return super().__getitem__(item)
+
+    def __len__(self):
+        return len(self.criteria_subjects) if self.use_criteria else len(self.eeg_subjects_list)
 
     def extract_meta_data_ptsd(self, line) -> Union[Tuple[int, sub.Criteria], None]:
         if self.is_subject_valid_ptsd(line):
