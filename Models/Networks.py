@@ -211,17 +211,19 @@ class EEGNetwork(pl.LightningModule):
 class IndicesNetwrork(pl.LightningModule):
     criteria_name = ['caps', 'stai', 'tas']
 
-    def __init__(self, embedding_lut: nn.Module, output_len):
+    def __init__(self, embedding_lut: nn.Module, criteria_num, bins_num: int = 1):
         super().__init__()
         self.embedding_lut = embedding_lut
         self.embedding_lut.requires_grad_(False)  # freeze LUT
-        self.fc = nn.Linear(embedding_lut.embedding_dim, output_len).float()
-        self.loss_fn = nn.MSELoss(reduction='none')
+        self.criteria_num = criteria_num
+        self.fc = nn.Linear(embedding_lut.embedding_dim, criteria_num * bins_num).float()
+        self.loss_fn = nn.MSELoss(reduction='none') if bins_num == 1 else nn.CrossEntropyLoss(reduction='none').float()
 
     def forward(self, subject_id, ground_truth):
         embeddings = self.embedding_lut(subject_id)
         prediction = self.fc(embeddings)
-        loss = torch.mean(self.loss_fn(prediction, ground_truth), dim=0)
+        prediction = prediction.view(subject_id.shape[0], -1, self.criteria_num).squeeze(1)
+        loss = torch.mean(self.loss_fn(prediction, ground_truth.long()), dim=0)
 
         return loss
 
@@ -248,3 +250,6 @@ class IndicesNetwrork(pl.LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=1e-2)
+
+    def test_step(self, batch, batch_idx):
+        self.validation_step(batch, batch_idx)

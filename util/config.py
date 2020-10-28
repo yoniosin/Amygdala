@@ -66,7 +66,7 @@ class fMRILearnerConfig(LearnerConfig):
 class EEGNetConfig:
     watch_hidden_size: int = 13
     reg_hidden_size: int = 13
-    embedding_size: int = 10
+    embedding_size: int = 5
     watch_len: int = 60
     reg_len: int = 180
     lr: float = 1e-2
@@ -109,6 +109,8 @@ class EEGData:
 
 @dataclass
 class EEGLearnerConfig:
+    full_train: bool = False
+    validation: bool = False
     learner: LearnerConfig = LearnerConfig()
     net: EEGNetConfig = EEGNetConfig()
     data: EEGData = EEGData()

@@ -2,7 +2,6 @@ import pytorch_lightning as pl
 from util.config import EEGLearnerConfig
 from pathlib import Path
 from torch.utils.data import DataLoader
-import torch
 from data.amygdala_data_set import AmygDataSet, CriteriaDataSet
 import pickle
 
@@ -29,14 +28,15 @@ class EEGDataModule(pl.LightningDataModule):
         self.train_ds, self.test_ds = None, None
         self.dataset_class = dataset_class
         self._phase = 1
-        self.ds:CriteriaDataSet = None
+        self.ds: CriteriaDataSet = None
         self.use_criteria = use_criteria
 
         if self.config.data.load:
             self.load_ds()
+            self.ds.n_outputs = 3
+            self.ds.bins = self.ds.generate_bins(3)
         else:
             self.build_ds()
-
 
     @property
     def phase(self): return self._phase
@@ -80,3 +80,6 @@ class EEGDataModule(pl.LightningDataModule):
 
     def val_dataloader(self) -> DataLoader:
         return DataLoader(self.test_ds, self.config.learner.batch_size) if self.phase == 3 else None
+
+    def test_dataloader(self):
+        return DataLoader(self.test_ds)
