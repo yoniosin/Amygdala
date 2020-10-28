@@ -207,7 +207,7 @@ class EEGSubjectPTSD:
         watch = torch.cat([w.watch_window.get_data() for w in self.paired_windows[:num_windows]])
         regulate = torch.cat([w.regulate_window.get_data() for w in self.paired_windows[:num_windows]])
 
-        res = {'watch': watch, 'regulate': regulate, **self.get_id()}
+        res = {'watch': watch, 'regulate': regulate, 'id': self.get_id()}
 
         return res
 

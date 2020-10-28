@@ -161,6 +161,7 @@ class EmbeddingPredictor(BaseModel):
 
         self.predicted_feature = feature
         self._embed = embedding_layer
+
         self.n_outputs = n_outputs
         self.meta_data_iter = meta_data_iter
 
@@ -210,7 +211,7 @@ class EmbeddingPredictor(BaseModel):
 
             return np.array(x), np.array(y)
 
-        (train_x, train_y), (test_x, test_y) = list(map(create_svr_labels, (True, False)))
+        (train_x, train_y), (test_x, test_y) = [create_svr_labels(s) for s in (True, False)]
         model = SVR(gamma='auto')
         model.fit(train_x, train_y)
         y_hat = model.predict(test_x)

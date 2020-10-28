@@ -66,7 +66,7 @@ class fMRILearnerConfig(LearnerConfig):
 class EEGNetConfig:
     watch_hidden_size: int = 13
     reg_hidden_size: int = 13
-    embedding_size: int = 3
+    embedding_size: int = 5
     watch_len: int = 60
     reg_len: int = 180
     lr: float = 1e-2
@@ -88,6 +88,7 @@ class EEGData:
     load: bool = True
     re_split: bool = False
     use_criteria: bool = False
+    criteria_len: int = 3
     ptsd_paths: DataPaths = DataPaths(
         'ptsd',
         '../../../data/eeg/processed/PTSD',
@@ -108,6 +109,8 @@ class EEGData:
 
 @dataclass
 class EEGLearnerConfig:
+    full_train: bool = False
+    validation: bool = False
     learner: LearnerConfig = LearnerConfig()
     net: EEGNetConfig = EEGNetConfig()
     data: EEGData = EEGData()
