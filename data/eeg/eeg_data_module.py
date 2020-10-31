@@ -82,4 +82,4 @@ class EEGDataModule(pl.LightningDataModule):
         return DataLoader(self.test_ds, self.config.learner.batch_size) if self.phase == 3 else None
 
     def test_dataloader(self):
-        return DataLoader(self.test_ds)
+        return DataLoader(self.test_ds, batch_size=2, drop_last=True)
