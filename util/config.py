@@ -111,6 +111,7 @@ class EEGData:
 class EEGLearnerConfig:
     full_train: bool = False
     validation: bool = False
+    correlation: bool = False
     learner: LearnerConfig = LearnerConfig()
     net: EEGNetConfig = EEGNetConfig()
     data: EEGData = EEGData()
